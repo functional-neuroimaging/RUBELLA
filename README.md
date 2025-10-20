@@ -2,10 +2,10 @@
 
 ## Files
 
-* rubella/          ...the software package
-* contributing.md   ...instructions for committing new code
-* environment.yml   ...a python environment file with all required dependencies
-* setup.py          ...install the python package so it can be imported
+* `rubella/`          ...the software package
+* `contributing.md`   ...instructions for committing new code
+* `environment.yml`   ...a python environment file with all required dependencies
+* `setup.py`          ...install the python package so it can be imported
 
 ## Python setup
 
