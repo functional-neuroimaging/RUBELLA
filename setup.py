@@ -13,7 +13,7 @@ from setuptools import Command, find_packages, setup
 
 # Package meta-data.
 NAME = 'rubella'
-DESCRIPTION = 'RUBELLA: Repository of utilitaries for Brain Experiments Low Level Analyses.'
+DESCRIPTION = 'RUBELLA: Repository of Utilitaries for Brain Experiments Low Level Analyses.'
 URL = 'https://github.com/functional-neuroimaging/RUBELLA'
 AUTHOR = 'GozziLab'
 REQUIRES_PYTHON = '>=3.9.0'
