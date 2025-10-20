@@ -1,0 +1,17 @@
+name: rubella
+channels:
+  - conda-forge
+  - simpleitk
+dependencies:
+  - python=3.9
+  - pip
+  - future
+  - matplotlib
+  - nibabel
+  - nilearn
+  - numpy
+  - pandas
+  - scikit-learn
+  - scipy
+  - seaborn
+  - simpleitk
