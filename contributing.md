@@ -1,4 +1,4 @@
-## Basic git commands
+## Getting started with basic git commands
 ```sh
 # create your own local version of the repository
 $ git clone https://github.com/functional-neuroimaging/RUBELLA.git
