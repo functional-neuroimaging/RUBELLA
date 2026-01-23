@@ -1,5 +1,16 @@
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
+
+
+def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
+    Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
+    Ym = np.reshape(np.mean(Y, axis=1), (Y.shape[0], 1))
+    r_num = (X-Xm).dot((Y-Ym).T)
+    r_den = np.sqrt(np.sum((X-Xm)**2, axis=1).reshape(-1,1)*np.sum((Y-Ym)**2, axis=1).reshape(1,-1))
+    r = r_num/r_den
+    return r
+
+
 def compute_dual_regression(data_dict, prior_bold_idx):
     for fname in data_dict['fname_list']:
         timeseries = data_dict[fname]['timeseries']
@@ -22,9 +33,9 @@ def get_concat_timeseries(data_dict):
 
 def get_sliding_windows(data_dict, length):
     # this returns a set of sliding windows concatenated across all data
-    windows = []
     fname_list = data_dict['fname_list']
     for fname in fname_list:
+        windows = []
         timeseries = data_dict[fname]['timeseries']
         if 'censoring_mask' in data_dict[fname].keys():
             censoring_mask = data_dict[fname]['censoring_mask']
@@ -42,38 +53,50 @@ def get_sliding_windows(data_dict, length):
             if (not censoring) or (censoring_mask[i:i+length].sum()==length): # only compute a window if it is contiguous
                 window_idx = idx_arr[i:i+length].astype(int)
                 windows.append(timeseries[window_idx,:].flatten())
-                
-    windows = np.array(windows)
-    return windows
+        data_dict[fname]['sliding_windows']= np.array(windows)
 
 
-def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
-    Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
-    Ym = np.reshape(np.mean(Y, axis=1), (Y.shape[0], 1))
-    r_num = (X-Xm).dot((Y-Ym).T)
-    r_den = np.sqrt(np.sum((X-Xm)**2, axis=1).reshape(-1,1)*np.sum((Y-Ym)**2, axis=1).reshape(1,-1))
-    r = r_num/r_den
-    return r
+def compute_QPP(data_dict, length, template_to_window_thresh = 0.05, max_iter=20, starting_idx='random'):
+    fname_list = data_dict['fname_list']
+    num_scan = len(fname_list)
+    num_windows_l = [data_dict[fname]['sliding_windows'].shape[0] for fname in fname_list]
+    num_windows_total = np.array(num_windows_l).sum()
 
+    def match_window_idx(idx):
+        i=0
+        for n in range(num_scan):
+            if i+num_windows_l[n]>idx:
+                scan_idx = idx-i
+                fname=fname_list[n]
+                return data_dict[fname]['sliding_windows'][scan_idx]
+            i+=num_windows_l[n]
+        raise
 
-def compute_QPP(windows, length, template_to_frame_thresh = 0.05, max_iter=20, starting_idx='random'):
     if starting_idx=='random':
         from random import randrange
-        starting_idx = randrange(windows.shape[0])
+        starting_idx = randrange(num_windows_total)
+        print(f'Template initiated with random index {starting_idx}')
     if not isinstance(starting_idx, int):
         raise ValueError("starting_idx must be an integer.")
 
-    template = windows[[starting_idx],:]
+    template = match_window_idx(starting_idx).reshape(1,-1)
 
     converge=False
     for i in range(max_iter):
         # compute corr. between each window and the template
-        corrs = vcorrcoef(X=windows, Y=template).flatten()
-
+        num_idx = 0
+        new_template = np.zeros((0,template.shape[1]))
+        for fname in fname_list:
+            windows = data_dict[fname]['sliding_windows']
+            corrs=vcorrcoef(template, windows).flatten()
+            idx = corrs>template_to_window_thresh # windows that pass threshold
+            new_template = np.append(new_template, windows[idx], axis=0)
+            num_idx+=idx.sum()
+        print(num_idx)
+        
         # average set of windows that pass corr. threshold to form a new template
-        idx = corrs>template_to_frame_thresh
-        print(idx.sum())
-        new_template = windows[idx].mean(axis=0).reshape(1,-1)
+        new_template = new_template.mean(axis=0).reshape(1,-1)
+        
         template_corr = np.corrcoef(template,new_template)[0,1]
         template = new_template
         # repeat until convergence or X iterations
@@ -82,6 +105,16 @@ def compute_QPP(windows, length, template_to_frame_thresh = 0.05, max_iter=20, s
         if converge:
             break
     print(i)
-
+    
     QPP = template.reshape(length,-1)
     return QPP
+
+
+def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.2):
+    fname_list = data_dict['fname_list']
+    template = QPP.reshape(1,-1)
+    for fname in fname_list:
+        corrs=vcorrcoef(template, data_dict[fname]['sliding_windows']).flatten()
+        idx = corrs>template_to_window_thresh # windows that pass threshold
+        data_dict[fname]['QPP_counts'] = idx.sum()
+    
