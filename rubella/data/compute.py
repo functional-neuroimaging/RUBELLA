@@ -31,11 +31,15 @@ def get_concat_timeseries(data_dict):
     return concat_timeseries
 
 
-def get_sliding_windows(data_dict, length):
+def get_sliding_windows(data_dict, window_length, step_size=1, skip_censored_windows=True):
     # this returns a set of sliding windows concatenated across all data
+    # set skip_censored_windows to True to exclude any window with censored data points, enforcing that each window is contiguous and the same length
+
+    if step_size<1:
+        raise ValueError(f"Step size must be at least 1, got {step_size} instead.")
+    
     fname_list = data_dict['fname_list']
     for fname in fname_list:
-        windows = []
         timeseries = data_dict[fname]['timeseries']
         if 'censoring_mask' in data_dict[fname].keys():
             censoring_mask = data_dict[fname]['censoring_mask']
@@ -49,17 +53,31 @@ def get_sliding_windows(data_dict, length):
             idx_arr = np.array(range(timeseries.shape[0]))
             censoring=False
 
-        for i in range(nframes-length):
-            if (not censoring) or (censoring_mask[i:i+length].sum()==length): # only compute a window if it is contiguous
-                window_idx = idx_arr[i:i+length].astype(int)
-                windows.append(timeseries[window_idx,:].flatten())
-        data_dict[fname]['sliding_windows']= np.array(windows)
+        windows = []
+        window_idx_l = []
+        i=0
+        while i<(nframes-window_length):
+            # include if skip_censored_windows=False, censoring was not applied, or no data points were censored
+            window_censoring_mask = censoring_mask[i:i+window_length]
+            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum()==window_length): # only compute a window if it is contiguous
+                window_idx = idx_arr[i:i+window_length][window_censoring_mask].astype(int) # censoring is applied to remove the None idx from idx_arr
+                windows.append(timeseries[window_idx,:])
+                window_idx_l.append(window_idx)
+            i+=step_size
+        data_dict[fname]['sliding_windows']= windows
+        data_dict[fname]['sliding_windows_idx']= window_idx_l # also save the timeseries index from which the windows were created
 
 
-def compute_QPP(data_dict, length, template_to_window_thresh = 0.05, max_iter=20, starting_idx='random'):
+def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.05, max_iter=20, starting_idx='random'):
     fname_list = data_dict['fname_list']
+
+    for fname in fname_list:
+        for window in data_dict[fname]['sliding_windows']:
+            if not window.shape[0]==window_length:
+                raise ValueError(f"The function is expecting windows of length {window_length}, but a window of length {window.shape[0]} was found for scan id {fname}")
+
     num_scan = len(fname_list)
-    num_windows_l = [data_dict[fname]['sliding_windows'].shape[0] for fname in fname_list]
+    num_windows_l = [len(data_dict[fname]['sliding_windows']) for fname in fname_list]
     num_windows_total = np.array(num_windows_l).sum()
 
     def match_window_idx(idx):
@@ -87,7 +105,8 @@ def compute_QPP(data_dict, length, template_to_window_thresh = 0.05, max_iter=20
         num_idx = 0
         new_template = np.zeros((0,template.shape[1]))
         for fname in fname_list:
-            windows = data_dict[fname]['sliding_windows']
+            windows = np.array(data_dict[fname]['sliding_windows'])
+            windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
             corrs=vcorrcoef(template, windows).flatten()
             idx = corrs>template_to_window_thresh # windows that pass threshold
             new_template = np.append(new_template, windows[idx], axis=0)
@@ -106,7 +125,7 @@ def compute_QPP(data_dict, length, template_to_window_thresh = 0.05, max_iter=20
             break
     print(i)
     
-    QPP = template.reshape(length,-1)
+    QPP = template.reshape(window_length,-1)
     return QPP
 
 
