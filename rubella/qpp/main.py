@@ -79,7 +79,7 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
     return QPP
 
 
-def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.2, remove_consecutives=False):
+def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
     '''
     Count QPP occurence within each scan as the number of windows that pass a correlation 
     threshold relative to the QPP template, as described in:
