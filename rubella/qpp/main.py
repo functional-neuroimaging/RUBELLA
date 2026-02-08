@@ -79,20 +79,30 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
     return QPP
 
 
-def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.2):
+def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.2, remove_consecutives=False):
     '''
     Count QPP occurence within each scan as the number of windows that pass a correlation 
     threshold relative to the QPP template, as described in:
     Belloy, M. E., ... & Verhoye, M. (2018). Dynamic resting state fMRI analysis in mice reveals 
     a set of Quasi-Periodic Patterns and illustrates their relationship with the global signal. 
     Neuroimage, 180, 463-484.
+
+    remove_consecutives accounts for multiple counts that may occur for one QPP cycle across 
+    neighboring sliding windows. With remove_consecutives=True, if a count occurs, the next X windows 
+    are not counted, where X = window_length - 1 to match the QPP cycle length.
     '''
     fname_list = data_dict['fname_list']
     template = QPP.reshape(1,-1)
+    window_length = QPP.shape[0]
     for fname in fname_list:
         windows = np.array(data_dict[fname]['sliding_windows'])
         windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
         corrs=vcorrcoef(template, windows).flatten()
         idx = corrs>template_to_window_thresh # windows that pass threshold
+        if remove_consecutives:
+            for i in range(len(idx)):
+                if idx[i]: # if there is an occurence, make sure there is not multiple successive counts
+                    idx[i+1:i+window_length] = False # cannot be true the length of the QPP
+        
         data_dict[fname]['QPP_counts'] = idx.sum()
     
