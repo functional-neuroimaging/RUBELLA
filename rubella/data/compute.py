@@ -22,6 +22,13 @@ def compute_dual_regression(data_dict, prior_bold_idx):
         data_dict[fname]['DR_cross_corr_z']=np.arctanh(data_dict[fname]['DR_cross_corr_r'])
 
 
+def compute_global_connectivity(data_dict, verbose=True):
+    for fname in data_dict['fname_list']:
+        if verbose:
+            print(fname)
+        data_dict[fname]['global_conn'] = np.corrcoef(data_dict[fname]['timeseries'].T).mean(axis=0)
+
+
 def get_concat_timeseries(data_dict):
     fname_list = data_dict['fname_list']
     concat_timeseries = data_dict[fname_list[0]]['timeseries']
