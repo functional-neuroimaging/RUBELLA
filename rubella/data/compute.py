@@ -26,7 +26,10 @@ def compute_global_connectivity(data_dict, verbose=True):
     for fname in data_dict['fname_list']:
         if verbose:
             print(fname)
-        data_dict[fname]['global_conn'] = np.corrcoef(data_dict[fname]['timeseries'].T).mean(axis=0)
+        cross_corr = np.corrcoef(data_dict[fname]['timeseries'].T)
+        cross_corr[np.isnan(cross_corr)] = 0
+        data_dict[fname]['global_conn'] = cross_corr.mean(axis=0)
+        del cross_corr
 
 
 def get_concat_timeseries(data_dict):
