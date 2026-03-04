@@ -4,7 +4,6 @@ channels:
   - simpleitk
 dependencies:
   - python=3.9
-  - pip
   - future
   - matplotlib
   - nibabel
@@ -14,5 +13,7 @@ dependencies:
   - scikit-learn
   - scipy
   - seaborn
-  - simpleitk
-  - rabies
+  - simpleitk=2.0.2
+  - pip
+  - pip:
+      - rabies
