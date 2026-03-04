@@ -2,7 +2,7 @@ import numpy as np
 from ..basic import vcorrcoef
 
 
-def compute_QPP(data_obj, sliding_window_dict, window_length, template_to_window_thresh = 0.1, max_iter=20, starting_idx='random'):
+def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 0.1, max_iter=20, starting_idx='random'):
     '''
     Automated detection of a quasi-periodic pattern (QPP) as described in: 
     Majeed, W., ..., & Keilholz, S. D. (2011). Spatiotemporal dynamics of low frequency BOLD fluctuations in rats 
@@ -20,7 +20,7 @@ def compute_QPP(data_obj, sliding_window_dict, window_length, template_to_window
     skip_censored_windows=True to ensure contiguous windows.
     '''
 
-    img_id_list = data_obj.img_id_list
+    img_id_list = list(sliding_window_dict.keys())
 
     for img_id in img_id_list:
         for window in sliding_window_dict[img_id]['sliding_windows']:
@@ -80,7 +80,7 @@ def compute_QPP(data_obj, sliding_window_dict, window_length, template_to_window
     return QPP
 
 
-def count_QPP_occurence(data_obj, sliding_window_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
+def count_QPP_occurence(sliding_window_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
     '''
     Count QPP occurence within each scan as the number of windows that pass a correlation 
     threshold relative to the QPP template, as described in:
@@ -92,7 +92,7 @@ def count_QPP_occurence(data_obj, sliding_window_dict, QPP, template_to_window_t
     neighboring sliding windows. With remove_consecutives=True, if a count occurs, the next X windows 
     are not counted, where X = window_length - 1 to match the QPP cycle length.
     '''
-    img_id_list = data_obj.img_id_list
+    img_id_list = list(sliding_window_dict.keys())
 
     template = QPP.reshape(1,-1)
     window_length = QPP.shape[0]
