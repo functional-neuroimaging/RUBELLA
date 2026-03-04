@@ -3,6 +3,7 @@
 ## Files
 
 * `rubella/`          ...the software package
+* `docs/`             ...detailed documentation of RUBELLA's usage
 * `contributing.md`   ...instructions for committing new code
 * `environment.yml`   ...a python environment file with all required dependencies
 * `setup.py`          ...install the python package so it can be imported
@@ -17,4 +18,28 @@ mamba env create -f rubella_env.yml # the .yml file will create a 'rubella' envi
 conda activate rubella # activate your python environment
 python setup.py install # this will install the rubella package, which can then be imported in python
 # you're set, now you can run python with the package installed
+```
+
+## Quick start
+RUBELLA begins by loading a list of timeseries Niftis into a DataObject.
+```py
+# first define a list of timeseries Nifti files in commonspace
+import glob
+timeseries_file_list = glob.glob('path_to_cleaned_nii_folder/*_cleaned.nii.gz')[:3]
+timeseries_file_list.sort()
+# if censoring was applied using RABIES, the list of censoring .csv files should be loaded too
+censoring_file_list = glob.glob('path_to_censoring_csv_folder/*_frame_censoring_mask.csv')
+
+from rubella.data_obj import DataObject
+data_obj = DataObject(timeseries_file_list, brain_mask_file, img_id_list=None, fname_split='_cleaned', censoring_file_list=censoring_file_list, verbose=True)
+```
+
+Then downstream analyses across all images are conveniently computed... for example for global connectivity:
+```py
+from rubella.basic import compute_global_connectivity
+GC_dict = compute_global_connectivity(data_obj, verbose=True)
+# GC_dict is a dictionary of global connectivity maps for each image loaded in the DataObject
+# each entry in the dictionary is accessed from the list of image IDs, img_id_list
+for img_id in data_obj.img_id_list:
+    global_connectivity = GC_dict[img_id]
 ```
