@@ -59,10 +59,7 @@ class DataObject:
         self.volume_idx = volume_idx
 
         # at minimum the data object loads a set of commonspace timeseries
-        timeseries_dict, num_timeframes_dict, img_id_list = self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
-        self.img_id_list = img_id_list
-        self.timeseries_dict = timeseries_dict
-        self.num_timeframes = num_timeframes_dict
+        self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
 
         if censoring_file_list:
             self.load_censoring_mask(censoring_file_list)
@@ -131,7 +128,10 @@ class DataObject:
             timeseries_dict[img_id] = timeseries
             num_timeframes_dict[img_id] = timeseries.shape[0]
 
-        return timeseries_dict, num_timeframes_dict, img_id_list
+        self.img_id_list = img_id_list
+        self.timeseries_dict = timeseries_dict
+        self.num_timeframes = num_timeframes_dict
+        return self
 
     def load_censoring_mask(self, censoring_file_list):
         """
