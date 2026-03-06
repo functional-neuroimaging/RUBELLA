@@ -11,6 +11,48 @@ def vcorrcoef(X, Y):  # return a correlation between each row of X with each row
     return r
 
 
+def seed_based_FC(data_obj, seed_roi, z_corr=False):
+    """
+    Compute seed based connectivity for one input seed, for all img_id timeseries in data_obj.
+
+    Parameters
+    ----------
+    data_obj : A RUBELLA DataObject
+
+    seed_roi : str, np.ndarray
+        The input ICA seed_roi, can be either the full path to a Nifti file, 
+        or a pre-loaded 1D numpy array of shape n_voxels
+    
+    z_corr : bool, default=False
+        Whether to output Fischer z transformed correlation values, instead of pearson's correlation.
+
+    Returns
+    -------
+    SBC_dict : dictionary
+        Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
+    """
+    if isinstance(seed_roi, np.ndarray): # can take in a pre-loaded array as input
+        if not data_obj.volume_idx.sum()==seed_roi.shape[0]:
+            raise ValueError("The input seed_roi array does not have the expected number of voxels in data_obj.volume_idx.")
+        seed_roi_arr = seed_roi
+    elif os.path.isfile(seed_roi):
+        seed_roi_arr = data_obj.load_img_to_array(seed_roi).astype(bool)
+    else:
+        raise ValueError("seed_roi is neither an array nor a file.")
+
+    SBC_dict = {}
+    for img_id in data_obj.img_id_list:
+        timeseries = data_obj.timeseries_dict[img_id]
+        # extract the voxel timeseries within the mask, and take the mean ROI timeseries
+        seed_timeseries = timeseries[:,seed_roi_arr].mean(axis=1)
+        seed_FC = vcorrcoef(timeseries.T, seed_timeseries.reshape(1,-1)).flatten() # shape the output into a vector
+        seed_FC[np.isnan(seed_FC)] = 0
+        if z_corr:
+            seed_FC = np.arctanh(seed_FC)
+        SBC_dict[img_id] = seed_FC
+    return SBC_dict
+    
+
 def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
     """
     Convenient wrapper for deriving dual regression outputs from a DataObject.
@@ -55,6 +97,8 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
         ICs_arr = IC_maps
     elif os.path.isfile(IC_maps):
         ICs_arr = data_obj.load_img_to_array(IC_maps)
+    else:
+        raise ValueError("IC_maps is neither an array nor a file.")
 
     if not IC_idx:
         IC_idx = list(range(ICs_arr.shape[0])) # take all ICs
