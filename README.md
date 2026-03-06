@@ -23,7 +23,11 @@ python setup.py install # this will install the rubella package, which can then 
 ## Quick start
 RUBELLA begins by loading a list of timeseries Niftis into a DataObject.
 ```py
-# first define a list of timeseries Nifti files in commonspace
+
+# provide a path to the commonspace brain mask
+brain_mask_file = '/path_to_mask_folder/commonspace_template_brain_mask_resampled.nii.gz'
+
+# define a list of timeseries Nifti files in commonspace
 import glob
 timeseries_file_list = glob.glob('path_to_cleaned_nii_folder/*_cleaned.nii.gz')[:3]
 timeseries_file_list.sort()
@@ -42,4 +46,19 @@ GC_dict = compute_global_connectivity(data_obj, verbose=True)
 # each entry in the dictionary is accessed from the list of image IDs, img_id_list
 for img_id in data_obj.img_id_list:
     global_connectivity = GC_dict[img_id]
+```
+
+Then the resulting connectivity maps can be visualized using RUBELLA's plotting functions:
+```py
+from rubella import plotting
+template_file = '/path_to_template_folder/commonspace_template.nii.gz'
+brain_mask_file = data_obj.brain_mask_file
+
+data = GC_dict[data_obj.img_id_list[0]] # inspecting the first image in the list
+
+fig,ax_list,cbar_list = plotting.plot_brain(
+        data,brain_mask_file,template_file,
+        plane='coronal', selected_slices='all', slices_per_row=6,
+        plot_cbar=True,
+        )
 ```
