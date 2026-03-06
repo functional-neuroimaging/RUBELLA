@@ -227,6 +227,17 @@ class DataObject:
         """
         sitk_img = sitk.ReadImage(img_file)
         dim = sitk_img.GetDimension()
+
+        mask_img = sitk.ReadImage(self.brain_mask_file)
+        if not sitk_img.GetSize()[:3]==mask_img.GetSize():
+            print("""
+                  Warning: The input image array does not match the brain mask.
+                  The image is resampled with the assumption that it occupies 
+                  the same space as the brain mask.
+                  """)
+            from rabies.utils import resample_volumes
+            sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                                                    motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
         if dim==4:
             img_array = sitk.GetArrayFromImage(sitk_img)[:,self.volume_idx]
         elif dim==3:
