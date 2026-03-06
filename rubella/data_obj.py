@@ -211,3 +211,24 @@ class DataObject:
             if not img_id in self.grouping.keys():
                 print(f'No group was assigned to {img_id}.')
         return self
+
+    def load_img_to_array(self, img_file):
+        """Support function for loading a input Nifti image to the 2D array format of the DataObject.
+
+        Parameters
+        ----------
+        img_file : str
+            Path to the input Nifti file.
+
+        Returns
+        -------
+        img_array : numpy array, 2D if the input is a 4D image and 1D for a 3D image.
+            The output image array.
+        """
+        sitk_img = sitk.ReadImage(img_file)
+        dim = sitk_img.GetDimension()
+        if dim==4:
+            img_array = sitk.GetArrayFromImage(sitk_img)[:,self.volume_idx]
+        elif dim==3:
+            img_array = sitk.GetArrayFromImage(sitk_img)[self.volume_idx]
+        return img_array
