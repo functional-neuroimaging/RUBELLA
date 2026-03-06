@@ -1,7 +1,6 @@
 import numpy as np
-import SimpleITK as sitk
 from rabies.analysis_pkg.analysis_math import dual_regression
-
+import os
 
 def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
     Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
@@ -12,22 +11,68 @@ def vcorrcoef(X, Y):  # return a correlation between each row of X with each row
     return r
 
 
-def compute_dual_regression(data_obj, IC_file, IC_idx=None):
-    ICs_arr = sitk.GetArrayFromImage(sitk.ReadImage(IC_file))[:,data_obj.volume_idx]
+def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
+    """
+    Convenient wrapper for deriving dual regression outputs from a DataObject.
+
+    Parameters
+    ----------
+    data_obj : A RUBELLA DataObject
+
+    IC_maps : str, np.ndarray
+        The input ICA maps, can be either the full path to a Nifti file, 
+        or a pre-loaded numpy array of shape n_ICsXn_voxels
+    
+    IC_idx : list, default=None
+        Optionally, a list of index can be inputed to pre-select the IC components 
+        of interest. It must be a list of integer, and the outputs will only 
+        include those indices. If None, all components are outputed.
+
+    z_corr : bool, default=False
+        Whether to output Fischer z transformed correlation values for 'DR_cross_corr'.
+        If False, the output is pearson's r.
+
+    Returns
+    -------
+    DR_dict : dictionary
+        The output is a nested dictionary, the contains the following keys a the first
+        level: 'DR_maps', 'DR_amp', and 'DR_cross_corr'. Each of those key is a 
+        dictionary with keys corresponding to data_obj.img_id_list, i.e. one entry
+        per img_id.
+        'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
+            The set of dual regression maps.
+        'DR_amp' : for each img_id, contains a scalar
+            The amplitude value estimated from each map.
+        'DR_cross_corr' : for each img_id, contains a 2D np.ndarray of shape n_ICsxn_ICs
+            A correlation matrix derived from the mutual correlation of
+            all DR component timecourse.
+
+    """
+
+    if isinstance(IC_maps, np.ndarray): # can take in a pre-loaded array as input
+        if not data_obj.volume_idx.sum()==IC_maps.shape[1]:
+            raise ValueError("The input IC_maps array does not have the expected number of voxels in data_obj.volume_idx.")
+        ICs_arr = IC_maps
+    elif os.path.isfile(IC_maps):
+        ICs_arr = data_obj.load_img_to_array(IC_maps)
 
     if not IC_idx:
         IC_idx = list(range(ICs_arr.shape[0])) # take all ICs
 
     DR_dict = {}
+    DR_dict['DR_maps']={}
+    DR_dict['DR_amp']={}
+    DR_dict['DR_cross_corr']={}
     for img_id in data_obj.img_id_list:
         timeseries = data_obj.timeseries_dict[img_id]
         DR = dual_regression(ICs_arr, timeseries)
         DR_maps = DR['C']*DR['S']
-        DR_dict[img_id] = {}
-        DR_dict[img_id]['DR_maps']=DR_maps[:,IC_idx]
-        DR_dict[img_id]['DR_amp']=DR['S'][IC_idx]
-        DR_dict[img_id]['DR_cross_corr_r']=np.corrcoef(DR['W'][:,IC_idx].T)
-        DR_dict[img_id]['DR_cross_corr_z']=np.arctanh(DR_dict[img_id]['DR_cross_corr_r'])
+        DR_dict['DR_maps'][img_id]=DR_maps[:,IC_idx]
+        DR_dict['DR_amp'][img_id]=DR['S'][IC_idx]
+        DR_corr = np.corrcoef(DR['W'][:,IC_idx].T)
+        if z_corr:
+            DR_corr = np.arctanh(DR_corr)
+        DR_dict['DR_cross_corr'][img_id]=DR_corr
     return DR_dict
 
 
