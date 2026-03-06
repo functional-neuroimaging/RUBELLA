@@ -105,6 +105,8 @@ def get_sliding_windows(data_obj, window_length, step_size=1, skip_censored_wind
         raise ValueError(f"Step size must be at least 1, got {step_size} instead.")
     
     sliding_window_dict = {}
+    sliding_window_dict['sliding_windows'] = {}
+    sliding_window_dict['sliding_windows_idx'] = {} # also save the timeseries index from which the windows were created
     img_id_list = data_obj.img_id_list
     for img_id in img_id_list:
         timeseries = data_obj.timeseries_dict[img_id]
@@ -131,7 +133,6 @@ def get_sliding_windows(data_obj, window_length, step_size=1, skip_censored_wind
                 windows.append(timeseries[window_idx,:])
                 window_idx_l.append(window_idx)
             i+=step_size
-        sliding_window_dict[img_id] = {}
-        sliding_window_dict[img_id]['sliding_windows']= windows
-        sliding_window_dict[img_id]['sliding_windows_idx']= window_idx_l # also save the timeseries index from which the windows were created
+        sliding_window_dict['sliding_windows'][img_id]= windows
+        sliding_window_dict['sliding_windows_idx'][img_id]= window_idx_l # also save the timeseries index from which the windows were created
     return sliding_window_dict
