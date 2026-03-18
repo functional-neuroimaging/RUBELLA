@@ -1,0 +1,182 @@
+import numpy as np
+from rabies.analysis_pkg.analysis_math import dual_regression
+import os
+
+def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
+    Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
+    Ym = np.reshape(np.mean(Y, axis=1), (Y.shape[0], 1))
+    r_num = (X-Xm).dot((Y-Ym).T)
+    r_den = np.sqrt(np.sum((X-Xm)**2, axis=1).reshape(-1,1)*np.sum((Y-Ym)**2, axis=1).reshape(1,-1))
+    r = r_num/r_den
+    return r
+
+
+def seed_based_FC(data_obj, seed_roi, z_corr=False):
+    """
+    Compute seed based connectivity for one input seed, for all img_id timeseries in data_obj.
+
+    Parameters
+    ----------
+    data_obj : A RUBELLA DataObject
+
+    seed_roi : str, np.ndarray
+        The input ICA seed_roi, can be either the full path to a Nifti file, 
+        or a pre-loaded 1D numpy array of shape n_voxels
+    
+    z_corr : bool, default=False
+        Whether to output Fischer z transformed correlation values, instead of pearson's correlation.
+
+    Returns
+    -------
+    SBC_dict : dictionary
+        Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
+    """
+    if isinstance(seed_roi, np.ndarray): # can take in a pre-loaded array as input
+        if not data_obj.volume_idx.sum()==seed_roi.shape[0]:
+            raise ValueError("The input seed_roi array does not have the expected number of voxels in data_obj.volume_idx.")
+        seed_roi_arr = seed_roi
+    elif os.path.isfile(seed_roi):
+        seed_roi_arr = data_obj.load_img_to_array(seed_roi).astype(bool)
+    else:
+        raise ValueError("seed_roi is neither an array nor a file.")
+
+    SBC_dict = {}
+    for img_id in data_obj.img_id_list:
+        timeseries = data_obj.timeseries_dict[img_id]
+        # extract the voxel timeseries within the mask, and take the mean ROI timeseries
+        seed_timeseries = timeseries[:,seed_roi_arr].mean(axis=1)
+        seed_FC = vcorrcoef(timeseries.T, seed_timeseries.reshape(1,-1)).flatten() # shape the output into a vector
+        seed_FC[np.isnan(seed_FC)] = 0
+        if z_corr:
+            seed_FC = np.arctanh(seed_FC)
+        SBC_dict[img_id] = seed_FC
+    return SBC_dict
+    
+
+def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
+    """
+    Convenient wrapper for deriving dual regression outputs from a DataObject.
+
+    Parameters
+    ----------
+    data_obj : A RUBELLA DataObject
+
+    IC_maps : str, np.ndarray
+        The input ICA maps, can be either the full path to a Nifti file, 
+        or a pre-loaded numpy array of shape n_ICsXn_voxels
+    
+    IC_idx : list, default=None
+        Optionally, a list of index can be inputed to pre-select the IC components 
+        of interest. It must be a list of integer, and the outputs will only 
+        include those indices. If None, all components are outputed.
+
+    z_corr : bool, default=False
+        Whether to output Fischer z transformed correlation values for 'DR_cross_corr'.
+        If False, the output is pearson's r.
+
+    Returns
+    -------
+    DR_dict : dictionary
+        The output is a nested dictionary, the contains the following keys a the first
+        level: 'DR_maps', 'DR_amp', and 'DR_cross_corr'. Each of those key is a 
+        dictionary with keys corresponding to data_obj.img_id_list, i.e. one entry
+        per img_id.
+        'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
+            The set of dual regression maps.
+        'DR_amp' : for each img_id, contains a scalar
+            The amplitude value estimated from each map.
+        'DR_cross_corr' : for each img_id, contains a 2D np.ndarray of shape n_ICsxn_ICs
+            A correlation matrix derived from the mutual correlation of
+            all DR component timecourse.
+
+    """
+
+    if isinstance(IC_maps, np.ndarray): # can take in a pre-loaded array as input
+        if not data_obj.volume_idx.sum()==IC_maps.shape[1]:
+            raise ValueError("The input IC_maps array does not have the expected number of voxels in data_obj.volume_idx.")
+        ICs_arr = IC_maps
+    elif os.path.isfile(IC_maps):
+        ICs_arr = data_obj.load_img_to_array(IC_maps)
+    else:
+        raise ValueError("IC_maps is neither an array nor a file.")
+
+    if not IC_idx:
+        IC_idx = list(range(ICs_arr.shape[0])) # take all ICs
+
+    DR_dict = {}
+    DR_dict['DR_maps']={}
+    DR_dict['DR_amp']={}
+    DR_dict['DR_cross_corr']={}
+    for img_id in data_obj.img_id_list:
+        timeseries = data_obj.timeseries_dict[img_id]
+        DR = dual_regression(ICs_arr, timeseries)
+        DR_maps = DR['C']*DR['S']
+        DR_dict['DR_maps'][img_id]=DR_maps[:,IC_idx]
+        DR_dict['DR_amp'][img_id]=DR['S'][IC_idx]
+        DR_corr = np.corrcoef(DR['W'][:,IC_idx].T)
+        if z_corr:
+            DR_corr = np.arctanh(DR_corr)
+        DR_dict['DR_cross_corr'][img_id]=DR_corr
+    return DR_dict
+
+
+def compute_global_connectivity(data_obj, verbose=True):
+    GC_dict = {}
+    for img_id in data_obj.img_id_list:
+        if verbose:
+            print(img_id)
+        cross_corr = np.corrcoef(data_obj.timeseries_dict[img_id].T)
+        cross_corr[np.isnan(cross_corr)] = 0
+        GC_dict[img_id] = cross_corr.mean(axis=0)
+        del cross_corr
+    return GC_dict
+
+
+def get_concat_timeseries(data_obj):
+    img_id_list = data_obj.img_id_list
+    concat_timeseries = data_obj.timeseries_dict[img_id_list[0]]
+    for img_id in img_id_list[1:]:
+        concat_timeseries = np.concatenate((concat_timeseries,data_obj.timeseries_dict[img_id]),axis=0)
+    print(concat_timeseries.shape)
+    return concat_timeseries
+
+
+def get_sliding_windows(data_obj, window_length, step_size=1, skip_censored_windows=True):
+    # this returns a set of sliding windows concatenated across all data
+    # set skip_censored_windows to True to exclude any window with censored data points, enforcing that each window is contiguous and the same length
+
+    if step_size<1:
+        raise ValueError(f"Step size must be at least 1, got {step_size} instead.")
+    
+    sliding_window_dict = {}
+    sliding_window_dict['sliding_windows'] = {}
+    sliding_window_dict['sliding_windows_idx'] = {} # also save the timeseries index from which the windows were created
+    img_id_list = data_obj.img_id_list
+    for img_id in img_id_list:
+        timeseries = data_obj.timeseries_dict[img_id]
+        if hasattr(data_obj, "censoring_mask") and img_id in data_obj.censoring_mask.keys():
+            censoring_mask = data_obj.censoring_mask[img_id]
+            nframes = len(censoring_mask)
+            idx_arr = np.array([None]*nframes)
+            idx_arr[censoring_mask] = np.array(range(timeseries.shape[0]))
+            censoring=True
+        else:
+            print(f'No censoring mask for {img_id}')
+            nframes = timeseries.shape[0]
+            idx_arr = np.array(range(timeseries.shape[0]))
+            censoring=False
+
+        windows = []
+        window_idx_l = []
+        i=0
+        while i<(nframes-window_length):
+            # include if skip_censored_windows=False, censoring was not applied, or no data points were censored
+            window_censoring_mask = censoring_mask[i:i+window_length]
+            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum()==window_length): # only compute a window if it is contiguous
+                window_idx = idx_arr[i:i+window_length][window_censoring_mask].astype(int) # censoring is applied to remove the None idx from idx_arr
+                windows.append(timeseries[window_idx,:])
+                window_idx_l.append(window_idx)
+            i+=step_size
+        sliding_window_dict['sliding_windows'][img_id]= windows
+        sliding_window_dict['sliding_windows_idx'][img_id]= window_idx_l # also save the timeseries index from which the windows were created
+    return sliding_window_dict

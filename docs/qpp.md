@@ -15,25 +15,24 @@ updated template defines the finalized QPP.
 
 ### First the data must be subdivided into sliding windows a priori
 ```python
-from rubella.data import compute
+# data_obj is a RUBELLA DataObject
+from rubella.basic import get_sliding_windows
 window_length=10
-compute.get_sliding_windows(data_dict, window_length=window_length, step_size=1, skip_censored_windows=True)
+sliding_window_dict = get_sliding_windows(data_obj, window_length=window_length, step_size=1, skip_censored_windows=True)
 ```
 
 ### Then a QPP can be generated as follows
 ```python
 from rubella.qpp.main import compute_QPP
-QPP = compute_QPP(data_dict, window_length=window_length, template_to_window_thresh = 0.1, max_iter=10, starting_idx='random')
+QPP = compute_QPP(sliding_window_dict, window_length=window_length, template_to_window_thresh = 0.1, max_iter=10, starting_idx='random')
 ```
 The ideal value for template_to_window_thresh will likely depend on the spatial smoothness of the input data. Also to ensure deterministic outputs, a fixed integer value for starting_idx can be provided.
 
 ### ...and the occurence rate for each scan can be then evaluated by counting windows above template_to_window_thresh
 ```python
 from rubella.qpp.main import count_QPP_occurence
-count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False)
-fname_list = data_dict['fname_list']
-for fname in fname_list: # loop throughout the scans to inspect the newly computed QPP occurence count
-    print(fname)
-    print(data_dict[fname]['QPP_counts'])
+QPP_counts_dict = count_QPP_occurence(sliding_window_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False)
+for img_id in data_obj.img_id_list: # loop throughout the scans to inspect the newly computed QPP occurence count
+    print(QPP_counts_dict[img_id])
 ```
 Select `remove_consecutives=True` to avoid counting a single QPP cycle multiple times across neighboring sliding windows.

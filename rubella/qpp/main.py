@@ -1,8 +1,8 @@
 import numpy as np
-from ..data.compute import vcorrcoef
+from ..basic import vcorrcoef
 
 
-def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_iter=20, starting_idx='random'):
+def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 0.1, max_iter=20, starting_idx='random'):
     '''
     Automated detection of a quasi-periodic pattern (QPP) as described in: 
     Majeed, W., ..., & Keilholz, S. D. (2011). Spatiotemporal dynamics of low frequency BOLD fluctuations in rats 
@@ -19,15 +19,16 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
     This function assumes that rubella.data.compute.get_sliding_windows was executed on data_dict a priori, with 
     skip_censored_windows=True to ensure contiguous windows.
     '''
-    fname_list = data_dict['fname_list']
 
-    for fname in fname_list:
-        for window in data_dict[fname]['sliding_windows']:
+    img_id_list = list(sliding_window_dict['sliding_windows'].keys())
+
+    for img_id in img_id_list:
+        for window in sliding_window_dict['sliding_windows'][img_id]:
             if not window.shape[0]==window_length:
-                raise ValueError(f"The function is expecting windows of length {window_length}, but a window of length {window.shape[0]} was found for scan id {fname}")
+                raise ValueError(f"The function is expecting windows of length {window_length}, but a window of length {window.shape[0]} was found for scan id {img_id}")
 
-    num_scan = len(fname_list)
-    num_windows_l = [len(data_dict[fname]['sliding_windows']) for fname in fname_list]
+    num_scan = len(img_id_list)
+    num_windows_l = [len(sliding_window_dict['sliding_windows'][img_id]) for img_id in img_id_list]
     num_windows_total = np.array(num_windows_l).sum()
 
     def match_window_idx(idx):
@@ -35,8 +36,8 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
         for n in range(num_scan):
             if i+num_windows_l[n]>idx:
                 scan_idx = idx-i
-                fname=fname_list[n]
-                return data_dict[fname]['sliding_windows'][scan_idx]
+                img_id=img_id_list[n]
+                return sliding_window_dict['sliding_windows'][img_id][scan_idx]
             i+=num_windows_l[n]
         raise
 
@@ -54,8 +55,8 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
         # compute corr. between each window and the template
         num_idx = 0
         new_template = np.zeros((0,template.shape[1]))
-        for fname in fname_list:
-            windows = np.array(data_dict[fname]['sliding_windows'])
+        for img_id in img_id_list:
+            windows = np.array(sliding_window_dict['sliding_windows'][img_id])
             windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
             corrs=vcorrcoef(template, windows).flatten()
             idx = corrs>template_to_window_thresh # windows that pass threshold
@@ -79,7 +80,7 @@ def compute_QPP(data_dict, window_length, template_to_window_thresh = 0.1, max_i
     return QPP
 
 
-def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
+def count_QPP_occurence(sliding_window_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
     '''
     Count QPP occurence within each scan as the number of windows that pass a correlation 
     threshold relative to the QPP template, as described in:
@@ -91,11 +92,13 @@ def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.1, remove_
     neighboring sliding windows. With remove_consecutives=True, if a count occurs, the next X windows 
     are not counted, where X = window_length - 1 to match the QPP cycle length.
     '''
-    fname_list = data_dict['fname_list']
+    img_id_list = list(sliding_window_dict['sliding_windows'].keys())
+
     template = QPP.reshape(1,-1)
     window_length = QPP.shape[0]
-    for fname in fname_list:
-        windows = np.array(data_dict[fname]['sliding_windows'])
+    QPP_counts_dict = {}
+    for img_id in img_id_list:
+        windows = np.array(sliding_window_dict['sliding_windows'][img_id])
         windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
         corrs=vcorrcoef(template, windows).flatten()
         idx = corrs>template_to_window_thresh # windows that pass threshold
@@ -103,6 +106,5 @@ def count_QPP_occurence(data_dict, QPP, template_to_window_thresh = 0.1, remove_
             for i in range(len(idx)):
                 if idx[i]: # if there is an occurence, make sure there is not multiple successive counts
                     idx[i+1:i+window_length] = False # cannot be true the length of the QPP
-        
-        data_dict[fname]['QPP_counts'] = idx.sum()
-    
+        QPP_counts_dict[img_id] = idx.sum()
+    return QPP_counts_dict
