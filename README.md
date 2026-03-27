@@ -16,7 +16,7 @@
 conda install -n base -c conda-forge mamba
 mamba env create -f rubella_env.yml # the .yml file will create a 'rubella' environment will all required dependencies
 conda activate rubella # activate your python environment
-python setup.py install # this will install the rubella package, which can then be imported in python
+pip install -e . # this will install the rubella package, which can then be imported in python
 # you're set, now you can run python with the package installed
 ```
 
