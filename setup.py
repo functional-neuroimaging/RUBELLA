@@ -28,7 +28,8 @@ REQUIRED = [
     'scikit-learn>=0.24.1',
     'scipy>=1.8.1',
     'seaborn>=0.11.1',
-    'simpleitk>=2.0.2',
+    'simpleitk>=2.5.0',
+    'rabies>=0.6.0',
 ]
 
 # What packages are optional?
