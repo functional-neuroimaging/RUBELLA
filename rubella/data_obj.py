@@ -2,6 +2,52 @@ import SimpleITK as sitk
 import pathlib
 import pandas as pd
 
+
+def load_img_to_array(img_file, brain_mask_file):
+    """Support function for loading an input Nifti image into an array format including 
+    only the voxels within the input brain mask. 
+
+    The input brain mask determines the expected image array spatial dimensions and resolution. 
+    If the input img_file does not match the resolution of the brain mask, the image 
+    is resampled to match the brain mask volume before being loaded as an array.
+    IMPORTANTLY: this assumes that despite a mismatch in resolution, the two images occupy the
+    same space - if not, the loaded array is likely to be empty after resampling to the brain mask.
+
+    Parameters
+    ----------
+    img_file : str
+        Path to the input Nifti file.
+
+    brain_mask_file : str
+        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+
+    Returns
+    -------
+    img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
+        The output image array.
+    """
+    sitk_img = sitk.ReadImage(img_file)
+    dim = sitk_img.GetDimension()
+
+    mask_img = sitk.ReadImage(brain_mask_file)
+    volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
+
+    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
+        print("""
+                Warning: The input image array does not match the brain mask.
+                The image is resampled with the assumption that it occupies 
+                the same space as the brain mask.
+                """)
+        from rabies.utils import resample_volumes
+        sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                                                motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+    if dim==4:
+        img_array = sitk.GetArrayFromImage(sitk_img)[:,volume_idx]
+    elif dim==3:
+        img_array = sitk.GetArrayFromImage(sitk_img)[volume_idx]
+    return img_array
+
+
 class DataObject:
     """RUBELLA's DataObject.
 
@@ -212,8 +258,12 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def load_img_to_array(self, img_file):
-        """Support function for loading a input Nifti image to the 2D array format of the DataObject.
+    def _load_img_to_array(self, img_file):
+        """
+        Wrapper for rubella.data_obj.load_img_to_array function.
+        This support function will load an input Nifti image to 
+        the 2D array format of the DataObject.
+        See help(rubella.data_obj.load_img_to_array) for more details.
 
         Parameters
         ----------
@@ -222,24 +272,7 @@ class DataObject:
 
         Returns
         -------
-        img_array : numpy array, 2D if the input is a 4D image and 1D for a 3D image.
+        img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
             The output image array.
         """
-        sitk_img = sitk.ReadImage(img_file)
-        dim = sitk_img.GetDimension()
-
-        mask_img = sitk.ReadImage(self.brain_mask_file)
-        if not sitk_img.GetSize()[:3]==mask_img.GetSize():
-            print("""
-                  Warning: The input image array does not match the brain mask.
-                  The image is resampled with the assumption that it occupies 
-                  the same space as the brain mask.
-                  """)
-            from rabies.utils import resample_volumes
-            sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
-                                                    motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
-        if dim==4:
-            img_array = sitk.GetArrayFromImage(sitk_img)[:,self.volume_idx]
-        elif dim==3:
-            img_array = sitk.GetArrayFromImage(sitk_img)[self.volume_idx]
-        return img_array
+        return load_img_to_array(img_file,self.brain_mask_file)

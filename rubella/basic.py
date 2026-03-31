@@ -1,6 +1,7 @@
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
 import os
+from .data_obj import load_img_to_array
 
 def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
     Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
@@ -36,7 +37,7 @@ def seed_based_FC(data_obj, seed_roi, z_corr=False):
             raise ValueError("The input seed_roi array does not have the expected number of voxels in data_obj.volume_idx.")
         seed_roi_arr = seed_roi
     elif os.path.isfile(seed_roi):
-        seed_roi_arr = data_obj.load_img_to_array(seed_roi).astype(bool)
+        seed_roi_arr = load_img_to_array(seed_roi, data_obj.brain_mask_file).astype(bool)
     else:
         raise ValueError("seed_roi is neither an array nor a file.")
 
@@ -96,7 +97,7 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
             raise ValueError("The input IC_maps array does not have the expected number of voxels in data_obj.volume_idx.")
         ICs_arr = IC_maps
     elif os.path.isfile(IC_maps):
-        ICs_arr = data_obj.load_img_to_array(IC_maps)
+        ICs_arr = load_img_to_array(IC_maps, data_obj.brain_mask_file)
     else:
         raise ValueError("IC_maps is neither an array nor a file.")
 
