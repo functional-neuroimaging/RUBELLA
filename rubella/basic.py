@@ -1,6 +1,53 @@
+import SimpleITK as sitk
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
 import os
+
+
+def load_img_to_array(img_file, brain_mask_file):
+    """Support function for loading an input Nifti image into an array format including 
+    only the voxels within the input brain mask. 
+
+    The input brain mask determines the expected image array spatial dimensions and resolution. 
+    If the input img_file does not match the resolution of the brain mask, the image 
+    is resampled to match the brain mask volume before being loaded as an array.
+    IMPORTANTLY: this assumes that despite a mismatch in resolution, the two images occupy the
+    same space - if not, the loaded array is likely to be empty after resampling to the brain mask.
+
+    Parameters
+    ----------
+    img_file : str
+        Path to the input Nifti file.
+
+    brain_mask_file : str
+        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+
+    Returns
+    -------
+    img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
+        The output image array.
+    """
+    sitk_img = sitk.ReadImage(img_file)
+    dim = sitk_img.GetDimension()
+
+    mask_img = sitk.ReadImage(brain_mask_file)
+    volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
+
+    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
+        print("""
+                Warning: The input image array does not match the brain mask.
+                The image is resampled with the assumption that it occupies 
+                the same space as the brain mask.
+                """)
+        from rabies.utils import resample_volumes
+        sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                                                motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+    if dim==4:
+        img_array = sitk.GetArrayFromImage(sitk_img)[:,volume_idx]
+    elif dim==3:
+        img_array = sitk.GetArrayFromImage(sitk_img)[volume_idx]
+    return img_array
+
 
 def vcorrcoef(X, Y):  # return a correlation between each row of X with each row of Y
     Xm = np.reshape(np.mean(X, axis=1), (X.shape[0], 1))
@@ -11,16 +58,24 @@ def vcorrcoef(X, Y):  # return a correlation between each row of X with each row
     return r
 
 
-def seed_based_FC(data_obj, seed_roi, z_corr=False):
+def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_corr=False):
     """
-    Compute seed based connectivity for one input seed, for all img_id timeseries in data_obj.
+    Compute seed based connectivity for one input seed, for all img_id within a timeseries_dict.
 
     Parameters
     ----------
-    data_obj : A RUBELLA DataObject
+    timeseries_dict : dict, DataObject.timeseries_dict
+        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+
+    brain_mask_file : str, DataObject.brain_mask_file
+        The full path to the brain mask Nifti file.
+
+    img_id_list : list, DataObject.img_id_list
+        List of image IDs that are keys for timeseries_dict
 
     seed_roi : str, np.ndarray
-        The input ICA seed_roi, can be either the full path to a Nifti file, 
+        The input seed region of interest. Must be a brain mask delineating the voxels part of 
+        the seed region. Can be either the full path to a Nifti file, 
         or a pre-loaded 1D numpy array of shape n_voxels
     
     z_corr : bool, default=False
@@ -31,18 +86,21 @@ def seed_based_FC(data_obj, seed_roi, z_corr=False):
     SBC_dict : dictionary
         Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
     """
+
+    volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
+
     if isinstance(seed_roi, np.ndarray): # can take in a pre-loaded array as input
-        if not data_obj.volume_idx.sum()==seed_roi.shape[0]:
-            raise ValueError("The input seed_roi array does not have the expected number of voxels in data_obj.volume_idx.")
+        if not volume_idx.sum()==seed_roi.shape[0]:
+            raise ValueError("The input seed_roi array does not have the expected number of voxels in volume_idx.")
         seed_roi_arr = seed_roi
     elif os.path.isfile(seed_roi):
-        seed_roi_arr = data_obj.load_img_to_array(seed_roi).astype(bool)
+        seed_roi_arr = load_img_to_array(seed_roi, brain_mask_file).astype(bool)
     else:
         raise ValueError("seed_roi is neither an array nor a file.")
 
     SBC_dict = {}
-    for img_id in data_obj.img_id_list:
-        timeseries = data_obj.timeseries_dict[img_id]
+    for img_id in img_id_list:
+        timeseries = timeseries_dict[img_id]
         # extract the voxel timeseries within the mask, and take the mean ROI timeseries
         seed_timeseries = timeseries[:,seed_roi_arr].mean(axis=1)
         seed_FC = vcorrcoef(timeseries.T, seed_timeseries.reshape(1,-1)).flatten() # shape the output into a vector
@@ -53,13 +111,20 @@ def seed_based_FC(data_obj, seed_roi, z_corr=False):
     return SBC_dict
     
 
-def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
+def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_maps, IC_idx=None, z_corr=False):
     """
-    Convenient wrapper for deriving dual regression outputs from a DataObject.
+    Convenient wrapper for deriving dual regression outputs from a intput timeseries_dict
 
     Parameters
     ----------
-    data_obj : A RUBELLA DataObject
+    timeseries_dict : dict, DataObject.timeseries_dict
+        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+
+    brain_mask_file : str, DataObject.brain_mask_file
+        The full path to the brain mask Nifti file.
+
+    img_id_list : list, DataObject.img_id_list
+        List of image IDs that are keys for timeseries_dict
 
     IC_maps : str, np.ndarray
         The input ICA maps, can be either the full path to a Nifti file, 
@@ -79,7 +144,7 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
     DR_dict : dictionary
         The output is a nested dictionary, the contains the following keys a the first
         level: 'DR_maps', 'DR_amp', and 'DR_cross_corr'. Each of those key is a 
-        dictionary with keys corresponding to data_obj.img_id_list, i.e. one entry
+        dictionary with keys corresponding to img_id_list, i.e. one entry
         per img_id.
         'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
             The set of dual regression maps.
@@ -91,12 +156,14 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
 
     """
 
+    volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
+
     if isinstance(IC_maps, np.ndarray): # can take in a pre-loaded array as input
-        if not data_obj.volume_idx.sum()==IC_maps.shape[1]:
-            raise ValueError("The input IC_maps array does not have the expected number of voxels in data_obj.volume_idx.")
+        if not volume_idx.sum()==IC_maps.shape[1]:
+            raise ValueError("The input IC_maps array does not have the expected number of voxels in volume_idx.")
         ICs_arr = IC_maps
     elif os.path.isfile(IC_maps):
-        ICs_arr = data_obj.load_img_to_array(IC_maps)
+        ICs_arr = load_img_to_array(IC_maps, brain_mask_file)
     else:
         raise ValueError("IC_maps is neither an array nor a file.")
 
@@ -107,8 +174,8 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
     DR_dict['DR_maps']={}
     DR_dict['DR_amp']={}
     DR_dict['DR_cross_corr']={}
-    for img_id in data_obj.img_id_list:
-        timeseries = data_obj.timeseries_dict[img_id]
+    for img_id in img_id_list:
+        timeseries = timeseries_dict[img_id]
         DR = dual_regression(ICs_arr, timeseries)
         DR_maps = DR['C']*DR['S']
         DR_dict['DR_maps'][img_id]=DR_maps[:,IC_idx]
@@ -120,28 +187,49 @@ def compute_dual_regression(data_obj, IC_maps, IC_idx=None, z_corr=False):
     return DR_dict
 
 
-def compute_global_connectivity(data_obj, verbose=True):
+def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
+    """
+    Computes global connectivity across each img_id from timeseries_dict.
+    Global connectivity is defined as the mean correlation of each voxel 
+    with all other voxels in the brain.    
+
+    Parameters
+    ----------
+    timeseries_dict : dict, DataObject.timeseries_dict
+        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+
+    img_id_list : list, DataObject.img_id_list
+        List of image IDs that are keys for timeseries_dict
+
+    verbose : bool, default=True
+        Whether to print the img_id for each iteration, which can be useful to track progress.
+
+    Returns
+    -------
+    GC_dict : dictionary
+        Dictionary with img_id_list as keys, and each entry is the associated global connectivity map.
+    """
+
     GC_dict = {}
-    for img_id in data_obj.img_id_list:
+    for img_id in img_id_list:
         if verbose:
             print(img_id)
-        cross_corr = np.corrcoef(data_obj.timeseries_dict[img_id].T)
+        cross_corr = np.corrcoef(timeseries_dict[img_id].T)
         cross_corr[np.isnan(cross_corr)] = 0
         GC_dict[img_id] = cross_corr.mean(axis=0)
         del cross_corr
     return GC_dict
 
 
-def get_concat_timeseries(data_obj):
-    img_id_list = data_obj.img_id_list
-    concat_timeseries = data_obj.timeseries_dict[img_id_list[0]]
+def get_concat_timeseries(timeseries_dict, img_id_list):
+    concat_timeseries = timeseries_dict[img_id_list[0]]
     for img_id in img_id_list[1:]:
-        concat_timeseries = np.concatenate((concat_timeseries,data_obj.timeseries_dict[img_id]),axis=0)
+        concat_timeseries = np.concatenate((concat_timeseries, timeseries_dict[img_id]), axis=0)
     print(concat_timeseries.shape)
     return concat_timeseries
 
 
-def get_sliding_windows(data_obj, window_length, step_size=1, skip_censored_windows=True):
+def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict, window_length, step_size=1, skip_censored_windows=True):
     # this returns a set of sliding windows concatenated across all data
     # set skip_censored_windows to True to exclude any window with censored data points, enforcing that each window is contiguous and the same length
 
@@ -151,11 +239,11 @@ def get_sliding_windows(data_obj, window_length, step_size=1, skip_censored_wind
     sliding_window_dict = {}
     sliding_window_dict['sliding_windows'] = {}
     sliding_window_dict['sliding_windows_idx'] = {} # also save the timeseries index from which the windows were created
-    img_id_list = data_obj.img_id_list
+    img_id_list = img_id_list
     for img_id in img_id_list:
-        timeseries = data_obj.timeseries_dict[img_id]
-        if hasattr(data_obj, "censoring_mask") and img_id in data_obj.censoring_mask.keys():
-            censoring_mask = data_obj.censoring_mask[img_id]
+        timeseries = timeseries_dict[img_id]
+        if hasattr(censoring_mask_dict, "censoring_mask") and img_id in censoring_mask_dict.keys():
+            censoring_mask = censoring_mask_dict[img_id]
             nframes = len(censoring_mask)
             idx_arr = np.array([None]*nframes)
             idx_arr[censoring_mask] = np.array(range(timeseries.shape[0]))
