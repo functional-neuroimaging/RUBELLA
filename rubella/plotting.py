@@ -5,7 +5,6 @@ from rabies.analysis_pkg.diagnosis_pkg.analysis_QC import threshold_top_percent
 from rabies.utils import recover_3D
 import SimpleITK as sitk
 import numpy as np
-plt.rcdefaults() # this is necessary to offset the black background from the RABIES import
 
 def plot_brain(data,brain_mask_file,template_file,
                fig=None,ax=None,plot_size_scale=0.1,
