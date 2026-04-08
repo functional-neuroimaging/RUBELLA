@@ -148,6 +148,8 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         per img_id.
         'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
             The set of dual regression maps.
+        'DR_time' : for each img_id, contains a 2D np.ndarray of shape n_timepointsxn_ICs
+            The timecourses of the dual regression components.
         'DR_amp' : for each img_id, contains a scalar
             The amplitude value estimated from each map.
         'DR_cross_corr' : for each img_id, contains a 2D np.ndarray of shape n_ICsxn_ICs
@@ -172,6 +174,7 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
 
     DR_dict = {}
     DR_dict['DR_maps']={}
+    DR_dict['DR_time']={}
     DR_dict['DR_amp']={}
     DR_dict['DR_cross_corr']={}
     for img_id in img_id_list:
@@ -180,6 +183,7 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         DR_maps = DR['C']*DR['S']
         DR_dict['DR_maps'][img_id]=DR_maps[:,IC_idx]
         DR_dict['DR_amp'][img_id]=DR['S'][IC_idx]
+        DR_dict['DR_time'][img_id]=DR['W'][:,IC_idx]
         DR_corr = np.corrcoef(DR['W'][:,IC_idx].T)
         if z_corr:
             DR_corr = np.arctanh(DR_corr)
