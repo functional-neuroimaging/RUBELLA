@@ -9,7 +9,7 @@ import numpy as np
 def plot_brain(data,brain_mask_file,template_file,
                fig=None,ax=None,plot_size_scale=0.1,
                plane='coronal', selected_slices='all', slices_per_row=None, # slice selection
-               cmap='cold_hot', vmax=None, vmin=None, plot_cbar=False, # cmap range
+               cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
                fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
                ):
     '''
@@ -57,6 +57,9 @@ def plot_brain(data,brain_mask_file,template_file,
 
     vmin : float
         The minimum value for the colormap. If None, it is set to -vmax.
+
+    alpha : float
+        The transparency level of the brain map overlay. Must be between 0 and 1.
 
     plot_cbar : bool
         Whether to plot a colorbar.
@@ -126,7 +129,7 @@ def plot_brain(data,brain_mask_file,template_file,
         vmin=-vmax
 
     slices,bbox_physical_dimensions = gen_slices_array(sitk_img,selected_slices,slices_per_row,threshold=fixed_threshold, plane=plane)
-    pos = ax.imshow(slices, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=vmin, vmax=vmax,cmap=cmap, alpha=1, interpolation='none')
+    pos = ax.imshow(slices, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=vmin, vmax=vmax,cmap=cmap, alpha=alpha, interpolation='none')
     ax.axis('off')
     if plot_cbar:
         cbar = fig.colorbar(pos, ax=ax)
@@ -140,7 +143,7 @@ def plot_many_brains(
         data_list,brain_mask_file,template_file,
         fig=None,ax_list=None,plot_size_scale=0.1,num_brain_per_row=1,
         plane='coronal', selected_slices='all', slices_per_row=None, # slice selection
-        cmap='cold_hot', vmax=None, vmin=None, plot_cbar=False, # cmap range
+        cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
         fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
         ):
     
@@ -214,7 +217,7 @@ def plot_many_brains(
         fig,ax,cbar = plot_brain(data,brain_mask_file,template_file,
                     fig=fig,ax=ax,plot_size_scale=plot_size_scale,
                     plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row,
-                    cmap=cmap, vmax=vmax, vmin=vmin, plot_cbar=plot_cbar,
+                    cmap=cmap, vmax=vmax, vmin=vmin, alpha=alpha, plot_cbar=plot_cbar,
                     fixed_threshold=fixed_threshold,percent_thresholding=percent_thresholding,top_percent=top_percent,
                     )
         cbar_list.append(cbar)
