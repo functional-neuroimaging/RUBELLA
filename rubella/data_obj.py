@@ -213,7 +213,7 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def _load_img_to_array(self, img_file):
+    def _load_img_to_array(self, img_file, input_is_mask=False):
         """
         Wrapper for rubella.data_obj.load_img_to_array function.
         This support function will load an input Nifti image to 
@@ -225,9 +225,13 @@ class DataObject:
         img_file : str
             Path to the input Nifti file.
 
+        input_is_mask : bool, default=False
+            Whether the input img_file is itself a brain mask or parcellation, in which case
+            the resampling is carried using antsApplyTransforms GenericLabel interpolator
+
         Returns
         -------
         img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
             The output image array.
         """
-        return load_img_to_array(img_file,self.brain_mask_file)
+        return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask)
