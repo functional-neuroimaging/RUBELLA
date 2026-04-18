@@ -4,7 +4,7 @@ from rabies.analysis_pkg.analysis_math import dual_regression
 import os
 
 
-def load_img_to_array(img_file, brain_mask_file):
+def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
     """Support function for loading an input Nifti image into an array format including 
     only the voxels within the input brain mask. 
 
@@ -21,6 +21,10 @@ def load_img_to_array(img_file, brain_mask_file):
 
     brain_mask_file : str
         Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+
+    input_is_mask : bool, default=False
+        Whether the input img_file is itself a brain mask or parcellation, in which case the 
+        resampling is carried using antsApplyTransforms GenericLabel interpolator.
 
     Returns
     -------
@@ -39,9 +43,20 @@ def load_img_to_array(img_file, brain_mask_file):
                 The image is resampled with the assumption that it occupies 
                 the same space as the brain mask.
                 """)
-        from rabies.utils import resample_volumes
-        sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
-                                                motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+        if input_is_mask:
+            from rabies.utils import antsApplyTransforms
+            import tempfile, shutil
+            tmppath = tempfile.mkdtemp()
+            out_file = f"{tmppath}/resampled_mask.nii.gz"
+            antsApplyTransforms(transforms = [], inverses = [], 
+                input_image = img_file, ref_image = brain_mask_file, output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
+            sitk_img = sitk.ReadImage(out_file, sitk.sitkInt16)
+            shutil.rmtree(tmppath)
+        else:
+            from rabies.utils import resample_volumes
+            sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                                                    motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+
     if dim==4:
         img_array = sitk.GetArrayFromImage(sitk_img)[:,volume_idx]
     elif dim==3:
@@ -94,7 +109,7 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
             raise ValueError("The input seed_roi array does not have the expected number of voxels in volume_idx.")
         seed_roi_arr = seed_roi
     elif os.path.isfile(seed_roi):
-        seed_roi_arr = load_img_to_array(seed_roi, brain_mask_file).astype(bool)
+        seed_roi_arr = load_img_to_array(seed_roi, brain_mask_file, input_is_mask=True).astype(bool)
     else:
         raise ValueError("seed_roi is neither an array nor a file.")
 
@@ -165,7 +180,7 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
             raise ValueError("The input IC_maps array does not have the expected number of voxels in volume_idx.")
         ICs_arr = IC_maps
     elif os.path.isfile(IC_maps):
-        ICs_arr = load_img_to_array(IC_maps, brain_mask_file)
+        ICs_arr = load_img_to_array(IC_maps, brain_mask_file, input_is_mask=False)
     else:
         raise ValueError("IC_maps is neither an array nor a file.")
 
