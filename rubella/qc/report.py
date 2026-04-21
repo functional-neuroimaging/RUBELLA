@@ -8,14 +8,17 @@ def group_stats_QC_plot(
         FC_map_dict, 
         brain_mask_file, 
         template_file,
-        selected_slices, 
+        selected_slices='all', 
         slices_per_row=8, 
-        threshold=True, 
+        plane='coronal',
+        threshold=True,
+        plot_scale=1.0, 
         vmax_FC=0.5, 
+        top_percent=10,
         include_stat=['tstat', 'avg', 'sd', 'overlap'],
         qc_data_dict={},
         ):
-    tstat_data, avg_FC, std_FC, percent_overlap = get_group_stats(FC_map_dict, avg_type='median', top_percent=10)
+    tstat_data, avg_FC, std_FC, percent_overlap = get_group_stats(FC_map_dict, avg_type='median', top_percent=top_percent)
 
     qc_keys = list(qc_data_dict.keys())
     num_maps = len(include_stat)+len(qc_keys)
@@ -23,7 +26,7 @@ def group_stats_QC_plot(
     n_slices = len(selected_slices)
     nrows_map = int(np.ceil(n_slices/slices_per_row))
 
-    fig,axes = plt.subplots(num_maps,1, figsize=(slices_per_row,num_maps*nrows_map), constrained_layout=True)
+    fig,axes = plt.subplots(num_maps,1, figsize=(slices_per_row*plot_scale,num_maps*nrows_map*plot_scale), constrained_layout=True)
     if num_maps==1:
         axes = [axes] # convert to list to avoid indexing error
     n=0
@@ -34,9 +37,9 @@ def group_stats_QC_plot(
         fig,ax,cbar = plotting.plot_brain(
                 tstat_data,brain_mask_file,template_file,
                 fig=fig,ax=ax,
-                plane='coronal', selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
+                plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=None, plot_cbar=True, # cmap range
-                fixed_threshold=fixed_threshold,percent_thresholding=False,top_percent=10, # image thresholding
+                fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f't-value', rotation = 270, labelpad=10)
         cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
@@ -51,11 +54,11 @@ def group_stats_QC_plot(
         fig,ax,cbar = plotting.plot_brain(
                 avg_FC,brain_mask_file,template_file,
                 fig=fig,ax=ax,
-                plane='coronal', selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
+                plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=None, plot_cbar=True, # cmap range
-                fixed_threshold=fixed_threshold,percent_thresholding=False,top_percent=10, # image thresholding
+                fixed_threshold=fixed_threshold, # image thresholding
                 )
-        cbar.set_label(f'Median Correlation', rotation = 270, labelpad=10)
+        cbar.set_label(f'Dataset median', rotation = 270, labelpad=10)
         cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
         n+=1
 
@@ -65,9 +68,9 @@ def group_stats_QC_plot(
         fig,ax,cbar = plotting.plot_brain(
                 std_FC,brain_mask_file,template_file,
                 fig=fig,ax=ax,
-                plane='coronal', selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
+                plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='inferno', vmax=None, vmin=0, plot_cbar=True, # cmap range
-                fixed_threshold=0,percent_thresholding=False,top_percent=10, # image thresholding
+                fixed_threshold=0, # image thresholding
                 )
         cbar.set_label(f'Inter-scan variability', rotation = 270, labelpad=10)
         n+=1
@@ -81,9 +84,9 @@ def group_stats_QC_plot(
         fig,ax,cbar = plotting.plot_brain(
                 percent_overlap,brain_mask_file,template_file,
                 fig=fig,ax=ax,
-                plane='coronal', selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
+                plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='viridis', vmax=vmax, vmin=0, plot_cbar=True, # cmap range
-                fixed_threshold=fixed_threshold,percent_thresholding=False,top_percent=10, # image thresholding
+                fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f'Percent overlap', rotation = 270, labelpad=10)
         cbar.set_ticks([fixed_threshold,vmax])
@@ -102,9 +105,9 @@ def group_stats_QC_plot(
         fig,ax,cbar = plotting.plot_brain(
                 qc_corr_map,brain_mask_file,template_file,
                 fig=fig,ax=ax,
-                plane='coronal', selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
+                plane=plane, selected_slices=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=-vmax, plot_cbar=True, # cmap range
-                fixed_threshold=fixed_threshold,percent_thresholding=False,top_percent=10, # image thresholding
+                fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f'{key} corr.', rotation = 270, labelpad=10)
         cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
