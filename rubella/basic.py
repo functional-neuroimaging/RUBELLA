@@ -248,7 +248,7 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
     return concat_timeseries
 
 
-def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict, window_length, step_size=1, skip_censored_windows=True):
+def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict={}, window_length=10, step_size=1, skip_censored_windows=True):
     # this returns a set of sliding windows concatenated across all data
     # set skip_censored_windows to True to exclude any window with censored data points, enforcing that each window is contiguous and the same length
 
@@ -261,7 +261,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict, windo
     img_id_list = img_id_list
     for img_id in img_id_list:
         timeseries = timeseries_dict[img_id]
-        if hasattr(censoring_mask_dict, "censoring_mask") and img_id in censoring_mask_dict.keys():
+        if img_id in censoring_mask_dict.keys():
             censoring_mask = censoring_mask_dict[img_id]
             nframes = len(censoring_mask)
             idx_arr = np.array([None]*nframes)
@@ -271,6 +271,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict, windo
             print(f'No censoring mask for {img_id}')
             nframes = timeseries.shape[0]
             idx_arr = np.array(range(timeseries.shape[0]))
+            censoring_mask = np.array([True]*nframes)
             censoring=False
 
         windows = []
