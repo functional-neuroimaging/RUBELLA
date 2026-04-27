@@ -41,7 +41,7 @@ data_obj = DataObject(timeseries_file_list, brain_mask_file, img_id_list=None, f
 Then downstream analyses across all images are conveniently computed... for example for global connectivity:
 ```py
 from rubella.basic import compute_global_connectivity
-GC_dict = compute_global_connectivity(data_obj, verbose=True)
+GC_dict = compute_global_connectivity(data_obj.timeseries_dict, data_obj.img_id_list, verbose=True)
 # GC_dict is a dictionary of global connectivity maps for each image loaded in the DataObject
 # each entry in the dictionary is accessed from the list of image IDs, img_id_list
 for img_id in data_obj.img_id_list:

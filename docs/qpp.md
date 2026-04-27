@@ -18,7 +18,7 @@ updated template defines the finalized QPP.
 # data_obj is a RUBELLA DataObject
 from rubella.basic import get_sliding_windows
 window_length=10
-sliding_window_dict = get_sliding_windows(data_obj, window_length=window_length, step_size=1, skip_censored_windows=True)
+sliding_window_dict = get_sliding_windows(timeseries_dict=data_obj.timeseries_dict, img_id_list=data_obj.img_id_list, censoring_mask_dict=data_obj.censoring_mask, window_length=window_length, step_size=1, skip_censored_windows=True)
 ```
 
 ### Then a QPP can be generated as follows
