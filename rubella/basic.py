@@ -248,43 +248,93 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
     return concat_timeseries
 
 
-def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict={}, window_length=10, step_size=1, skip_censored_windows=True):
-    # this returns a set of sliding windows concatenated across all data
-    # set skip_censored_windows to True to exclude any window with censored data points, enforcing that each window is contiguous and the same length
+def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, skip_censored_windows=True):
+    """Extract sliding windows of fMRI timeseries data across subjects, with optional
+    motion censoring support.
 
-    if step_size<1:
+    For each subject, windows are stepped across the full original temporal extent of
+    the scan. When a censoring mask is provided, censored frames are excluded from each
+    window's data, so a window may contain fewer frames than ``window_length``.
+    If ``skip_censored_windows=True``, only fully contiguous (uncensored) windows are retained.
+
+    Parameters
+    ----------
+    timeseries_dict : dict[str, numpy array]
+        Mapping from image ID to timeseries array of shape (n_retained_frames, n_voxels),
+        where n_retained_frames is the number of frames after censoring has been applied upstream.
+
+    img_id_list : list[str]
+        Ordered list of image IDs to process. Must be keys of ``timeseries_dict``.
+
+    censoring_mask_dict : dict[str, numpy array], default=None
+        Mapping from image ID to a boolean array of length n_total_frames (i.e. the original,
+        pre-censoring frame count). True indicates a frame was retained; False indicates it was
+        censored. If an image ID is absent, no censoring is applied for that subject.
+
+    window_length : int, default=10
+        Number of original (pre-censoring) frames spanned by each window.
+
+    step_size : int, default=1
+        Number of frames to advance between successive windows. Must be >= 1.
+
+    skip_censored_windows : bool, default=True
+        If True, discard any window that contains at least one censored frame, ensuring every
+        retained window has exactly ``window_length`` uncensored frames. If False, all windows
+        are kept regardless of how many frames were censored within them.
+
+    Returns
+    -------
+    sliding_window_dict : dict
+        Dictionary with the following keys:
+
+        'sliding_windows' : dict[str, list[numpy array]]
+            For each image ID, a list of arrays of shape (n_uncensored_frames_in_window, n_voxels).
+            When ``skip_censored_windows=False``, n_uncensored_frames_in_window may be less
+            than ``window_length``.
+
+        'sliding_windows_idx' : dict[str, list[numpy array]]
+            For each image ID, a list of 1-D integer arrays containing the indices into the
+            retained timeseries (rows of ``timeseries_dict`` values) used to build each window.
+            Useful for traceability and cross-referencing with other per-frame metadata.
+    """
+
+    if step_size < 1:
         raise ValueError(f"Step size must be at least 1, got {step_size} instead.")
-    
+
+    if censoring_mask_dict is None:
+        censoring_mask_dict = {}
+
     sliding_window_dict = {}
     sliding_window_dict['sliding_windows'] = {}
     sliding_window_dict['sliding_windows_idx'] = {} # also save the timeseries index from which the windows were created
-    img_id_list = img_id_list
+
     for img_id in img_id_list:
         timeseries = timeseries_dict[img_id]
         if img_id in censoring_mask_dict.keys():
             censoring_mask = censoring_mask_dict[img_id]
             nframes = len(censoring_mask)
-            idx_arr = np.array([None]*nframes)
+            idx_arr = np.array([None] * nframes)
             idx_arr[censoring_mask] = np.array(range(timeseries.shape[0]))
-            censoring=True
+            censoring = True
         else:
             print(f'No censoring mask for {img_id}')
             nframes = timeseries.shape[0]
             idx_arr = np.array(range(timeseries.shape[0]))
-            censoring_mask = np.array([True]*nframes)
-            censoring=False
+            censoring_mask = np.array([True] * nframes)
+            censoring = False
 
         windows = []
         window_idx_l = []
-        i=0
-        while i<(nframes-window_length):
-            # include if skip_censored_windows=False, censoring was not applied, or no data points were censored
-            window_censoring_mask = censoring_mask[i:i+window_length]
-            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum()==window_length): # only compute a window if it is contiguous
-                window_idx = idx_arr[i:i+window_length][window_censoring_mask].astype(int) # censoring is applied to remove the None idx from idx_arr
-                windows.append(timeseries[window_idx,:])
+        i = 0
+        while i <= (nframes - window_length):
+            window_censoring_mask = censoring_mask[i:i + window_length]
+            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum() == window_length):
+                window_idx = idx_arr[i:i + window_length][window_censoring_mask].astype(int) # censoring is applied to remove the None idx from idx_arr
+                windows.append(timeseries[window_idx, :])
                 window_idx_l.append(window_idx)
-            i+=step_size
-        sliding_window_dict['sliding_windows'][img_id]= windows
-        sliding_window_dict['sliding_windows_idx'][img_id]= window_idx_l # also save the timeseries index from which the windows were created
+            i += step_size
+
+        sliding_window_dict['sliding_windows'][img_id] = windows
+        sliding_window_dict['sliding_windows_idx'][img_id] = window_idx_l
+
     return sliding_window_dict
