@@ -248,14 +248,20 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
     return concat_timeseries
 
 
-def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, skip_censored_windows=True):
+def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, skip_censored_windows=False, fc_func=None, fc_kwargs={}):
     """Extract sliding windows of fMRI timeseries data across subjects, with optional
-    motion censoring support.
+    motion censoring support and optional per-window functional connectivity computation.
 
     For each subject, windows are stepped across the full original temporal extent of
     the scan. When a censoring mask is provided, censored frames are excluded from each
-    window's data, so a window may contain fewer frames than ``window_length``.
+    window's data, so a window may contain fewer rows than ``window_length``.
     If ``skip_censored_windows=True``, only fully contiguous (uncensored) windows are retained.
+
+    If ``fc_func`` is provided, each window's timeseries is passed through that function
+    and the output connectivity array is stored in place of the raw timeseries.
+    The function must accept ``timeseries_dict`` and ``img_id_list`` as keyword arguments
+    (following the package convention), which are injected automatically per window.
+    All other required arguments should be passed via ``fc_kwargs``.
 
     Parameters
     ----------
@@ -282,15 +288,60 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         retained window has exactly ``window_length`` uncensored frames. If False, all windows
         are kept regardless of how many frames were censored within them.
 
+    fc_func : callable, default=None
+        A functional connectivity function to apply to each window's timeseries. Must follow
+        the package convention of accepting ``timeseries_dict`` and ``img_id_list`` as keyword
+        arguments. It should return a dict keyed by img_id, with each value being the
+        connectivity array for that subject's window. If None, raw timeseries windows
+        are returned.
+
+    fc_kwargs : dict, default={}
+        Additional keyword arguments forwarded to ``fc_func`` (e.g. brain_mask_file, seed_roi,
+        z_corr). The ``timeseries_dict`` and ``img_id_list`` arguments are injected automatically
+        and should not be included here.
+
+    Examples
+        --------
+        Return raw timeseries windows (default behaviour):
+
+        >>> sliding_window_dict = get_sliding_windows(
+        ...     timeseries_dict=data_obj.timeseries_dict,
+        ...     img_id_list=data_obj.img_id_list,
+        ...     censoring_mask_dict=data_obj.censoring_mask,
+        ...     window_length=360,   # 6 min at TR=1s
+        ...     step_size=180,       # 3 min step
+        ...     skip_censored_windows=False,
+        ... )
+
+        Compute seed-based connectivity within each window by passing ``fc_func``.
+        Note that ``timeseries_dict`` and ``img_id_list`` are injected automatically
+        and must not be included in ``fc_kwargs``:
+
+        >>> sliding_window_dict = get_sliding_windows(
+        ...     timeseries_dict=data_obj.timeseries_dict,
+        ...     img_id_list=data_obj.img_id_list,
+        ...     censoring_mask_dict=data_obj.censoring_mask,
+        ...     window_length=360,
+        ...     step_size=180,
+        ...     skip_censored_windows=False,
+        ...     fc_func=rubella.basic.seed_based_FC,
+        ...     fc_kwargs={
+        ...         'brain_mask_file': data_obj.brain_mask_file,
+        ...         'seed_roi': my_seed_roi,
+        ...         'z_corr': True,
+        ...     },
+        ... )
+
     Returns
     -------
     sliding_window_dict : dict
         Dictionary with the following keys:
 
         'sliding_windows' : dict[str, list[numpy array]]
-            For each image ID, a list of arrays of shape (n_uncensored_frames_in_window, n_voxels).
-            When ``skip_censored_windows=False``, n_uncensored_frames_in_window may be less
-            than ``window_length``.
+            For each image ID, a list of arrays per window. If ``fc_func`` is None, each array
+            has shape (n_uncensored_frames_in_window, n_voxels). If ``fc_func`` is provided,
+            each array is the connectivity output for that window, with shape determined by
+            ``fc_func``.
 
         'sliding_windows_idx' : dict[str, list[numpy array]]
             For each image ID, a list of 1-D integer arrays containing the indices into the
@@ -305,36 +356,74 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         censoring_mask_dict = {}
 
     sliding_window_dict = {}
-    sliding_window_dict['sliding_windows'] = {}
-    sliding_window_dict['sliding_windows_idx'] = {} # also save the timeseries index from which the windows were created
+    sliding_window_dict['sliding_windows'] = {img_id: [] for img_id in img_id_list}
+    sliding_window_dict['sliding_windows_idx'] = {img_id: [] for img_id in img_id_list}
 
+    # Build per-subject index arrays once, outside the window loop
+    subject_meta = {}
     for img_id in img_id_list:
         timeseries = timeseries_dict[img_id]
-        if img_id in censoring_mask_dict.keys():
+        if img_id in censoring_mask_dict:
             censoring_mask = censoring_mask_dict[img_id]
             nframes = len(censoring_mask)
             idx_arr = np.array([None] * nframes)
-            idx_arr[censoring_mask] = np.array(range(timeseries.shape[0]))
+            idx_arr[censoring_mask] = np.arange(timeseries.shape[0])
             censoring = True
         else:
             print(f'No censoring mask for {img_id}')
             nframes = timeseries.shape[0]
-            idx_arr = np.array(range(timeseries.shape[0]))
-            censoring_mask = np.array([True] * nframes)
+            idx_arr = np.arange(timeseries.shape[0])
+            censoring_mask = np.ones(nframes, dtype=bool)
             censoring = False
+        subject_meta[img_id] = (timeseries, censoring_mask, idx_arr, nframes, censoring)
 
-        windows = []
-        window_idx_l = []
-        i = 0
-        while i <= (nframes - window_length):
+    # Use the first subject's nframes to drive the window loop
+    # (assumes all subjects have the same scan length)
+    nframes = subject_meta[img_id_list[0]][3]
+
+    i = 0
+    while i <= (nframes - window_length):
+        # Build a single-window timeseries_dict for all subjects at position i
+        window_ts_dict = {}
+        window_idx_dict = {}
+
+        for img_id in img_id_list:
+            timeseries, censoring_mask, idx_arr, _, censoring = subject_meta[img_id]
             window_censoring_mask = censoring_mask[i:i + window_length]
-            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum() == window_length):
-                window_idx = idx_arr[i:i + window_length][window_censoring_mask].astype(int) # censoring is applied to remove the None idx from idx_arr
-                windows.append(timeseries[window_idx, :])
-                window_idx_l.append(window_idx)
-            i += step_size
 
-        sliding_window_dict['sliding_windows'][img_id] = windows
-        sliding_window_dict['sliding_windows_idx'][img_id] = window_idx_l
+            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum() == window_length):
+                window_idx = idx_arr[i:i + window_length][window_censoring_mask].astype(int)
+                window_ts_dict[img_id] = timeseries[window_idx, :]
+                window_idx_dict[img_id] = window_idx
+
+        if window_ts_dict:  # at least one subject has a valid window at this position
+            if fc_func is not None:
+                fc_output = fc_func(
+                    timeseries_dict=window_ts_dict,
+                    img_id_list=list(window_ts_dict.keys()),
+                    **fc_kwargs
+                )
+
+                # Validate that fc_output keys match the expected img_ids for this window
+                expected_ids = set(window_ts_dict.keys())
+                returned_ids = set(fc_output.keys())
+                if expected_ids != returned_ids:
+                    missing = expected_ids - returned_ids
+                    unexpected = returned_ids - expected_ids
+                    raise ValueError(
+                        f"fc_func '{fc_func.__name__}' returned unexpected keys at window position i={i}. "
+                        f"Missing img_ids: {missing if missing else 'none'}. "
+                        f"Unexpected img_ids: {unexpected if unexpected else 'none'}."
+                    )
+
+                for img_id, fc_arr in fc_output.items():
+                    sliding_window_dict['sliding_windows'][img_id].append(fc_arr)
+                    sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
+            else:
+                for img_id, window_ts in window_ts_dict.items():
+                    sliding_window_dict['sliding_windows'][img_id].append(window_ts)
+                    sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
+
+        i += step_size
 
     return sliding_window_dict
