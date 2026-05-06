@@ -231,6 +231,64 @@ def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
     return GC_dict
 
 
+def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellation, roi_ids=None, z_corr = False):
+    """
+    Compute a parcellated functional connectivity matrix for each img_id within a timeseries_dict.
+
+    For each subject, the timeseries of each parcel is obtained by averaging across its constituent
+    voxels, and a pairwise correlation matrix is then computed across all parcels.
+    The diagonal is set to NaN.
+
+    Parameters
+    ----------
+    timeseries_dict : dict, DataObject.timeseries_dict
+        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+
+    brain_mask_file : str, DataObject.brain_mask_file
+        The full path to the brain mask Nifti file.
+
+    img_id_list : list, DataObject.img_id_list
+        List of image IDs that are keys for timeseries_dict.
+
+    parcellation : str, np.ndarray, or list
+        The input parcellation defining the ROIs. Accepted formats follow _parse_parcellation():
+        a path to a multi-label NIfTI, a pre-loaded 1D integer array, a list of single-label
+        NIfTI paths, or a list of pre-loaded binary 1D arrays.
+
+    roi_ids : list, default=None
+        Optionally, a list of labels to assign to each parcel. Must match the number of parcels.
+        If None, integer labels are assigned automatically by _parse_parcellation().
+
+    z_corr : bool, default=False
+        Whether to output Fischer z transformed correlation values, instead of Pearson's r.
+        Note that the diagonal is set to NaN after the transform is applied.
+
+    Returns
+    -------
+    FCM_dict : dictionary
+        Nested dictionary with img_id_list as keys. Each entry contains:
+        'parcel_ids' : list
+            The ordered list of parcel labels corresponding to the rows/columns of the matrix.
+        'matrix' : np.ndarray of shape n_parcels x n_parcels
+            The functional connectivity matrix for that subject. The diagonal is NaN.
+    """
+    
+    parcels_d = _parse_parcellation(parcellation, brain_mask_file, roi_ids=roi_ids)
+    parcel_ids = list(parcels_d.keys())
+
+    FCM_dict = {}
+    for img_id in img_id_list:
+        FCM_dict[img_id] = {}
+        FCM_dict[img_id]['parcel_ids'] = parcel_ids
+        parcellated_timeseries = np.array([timeseries_dict[img_id][:,parcels_d[p]].mean(axis=1) for p in parcel_ids])
+        corr_matrix = np.corrcoef(parcellated_timeseries)
+        if z_corr:
+            corr_matrix = np.arctanh(corr_matrix)
+        np.fill_diagonal(corr_matrix, np.nan)
+        FCM_dict[img_id]['matrix'] = corr_matrix
+    return FCM_dict
+
+
 def get_concat_timeseries(timeseries_dict, img_id_list):
     concat_timeseries = timeseries_dict[img_id_list[0]]
     for img_id in img_id_list[1:]:
