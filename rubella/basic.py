@@ -102,14 +102,8 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
         Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
     """
 
-    volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
-
-    if isinstance(seed_roi, np.ndarray): # can take in a pre-loaded array as input
-        if not volume_idx.sum()==seed_roi.shape[0]:
-            raise ValueError("The input seed_roi array does not have the expected number of voxels in volume_idx.")
-        seed_roi_arr = seed_roi
-    elif os.path.isfile(seed_roi):
-        seed_roi_arr = load_img_to_array(seed_roi, brain_mask_file, input_is_mask=True).astype(bool)
+    if isinstance(seed_roi, np.ndarray) or os.path.isfile(seed_roi):
+        seed_roi_arr = _parse_parcellation([seed_roi], brain_mask_file, roi_ids=None)[1]
     else:
         raise ValueError("seed_roi is neither an array nor a file.")
 
@@ -440,3 +434,108 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         i += step_size
 
     return sliding_window_dict
+
+
+'''
+Utils
+'''
+
+def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
+    """
+    Parse parcellation input into a dictionary of {label_id: 1D bool mask}.
+
+    Accepted inputs:
+        - str/Path          : single multi-label NIfTI → one mask per unique label
+        - np.ndarray        : pre-loaded multi-label 1D array (brain voxels only)
+        - list[str/Path]    : one single-label NIfTI per seed
+        - list[np.ndarray]  : one pre-loaded 1D array per seed
+
+    Parameters
+    ----------
+    parcellation    : see above
+    brain_mask_file : path to brain mask NIfTI
+    roi_ids         : optional list of strings to use as dictionary keys.
+                      Must match the number of labels/seeds in parcellation.
+
+    Returns
+    -------
+    parcels : dict mapping label ID (int or str) → 1D bool np.ndarray
+
+    Notes
+    -----
+    Generated with Claude Sonnet 4.6 (Anthropic), claude.ai — May 2026.    
+    """
+
+    def _check_array(arr, idx=""):
+        volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
+        if volume_idx.sum() != len(arr):
+            raise ValueError(
+                f"Array{f' at index {idx}' if idx != '' else ''} length {len(arr)} "
+                f"does not match brain mask voxel count {volume_idx.sum()}."
+            )
+
+    def _check_integer_labels(arr):
+        unique_vals = np.unique(arr)
+        float_vals = unique_vals[unique_vals != np.floor(unique_vals)]
+        if len(float_vals) > 0:
+            raise ValueError(
+                f"Parcellation array contains non-integer label values: {float_vals.tolist()}"
+            )
+
+    def _check_binary_mask(arr, idx=""):
+        unique_vals = np.unique(arr)
+        if not np.all(np.isin(unique_vals, [0, 1])):
+            unexpected = unique_vals[~np.isin(unique_vals, [0, 1])]
+            raise ValueError(
+                f"Seed mask{f' at index {idx}' if idx != '' else ''} is not binary. "
+                f"Unexpected values: {unexpected.tolist()}"
+            )
+
+    def _apply_ids(labels, masks):
+        if roi_ids is not None:
+            if len(roi_ids) != len(labels):
+                raise ValueError(
+                    f"roi_ids has {len(roi_ids)} entries but parcellation has {len(labels)} labels."
+                )
+            labels = roi_ids
+        return dict(zip(labels, masks))
+
+    # Single NIfTI path → multi-label
+    if isinstance(parcellation, (str, os.PathLike)):
+        arr = load_img_to_array(parcellation, brain_mask_file, input_is_mask=True)
+        _check_integer_labels(arr)
+        unique_labels = np.unique(arr[arr != 0]).astype(int)
+        return _apply_ids(unique_labels.tolist(), [arr == l for l in unique_labels])
+
+    # Pre-loaded array → multi-label
+    if isinstance(parcellation, np.ndarray):
+        _check_array(parcellation)
+        _check_integer_labels(parcellation)
+        unique_labels = np.unique(parcellation[parcellation != 0]).astype(int)
+        return _apply_ids(unique_labels.tolist(), [parcellation == l for l in unique_labels])
+
+    # List inputs
+    if isinstance(parcellation, list):
+        if len(parcellation) == 0:
+            raise ValueError("Parcellation list is empty.")
+
+        if isinstance(parcellation[0], (str, os.PathLike)):
+            masks = []
+            for i, p in enumerate(parcellation):
+                arr = load_img_to_array(p, brain_mask_file, input_is_mask=True)
+                _check_binary_mask(arr, idx=i)
+                masks.append(arr.astype(bool))
+            return _apply_ids(list(range(1, len(masks) + 1)), masks)
+
+        if isinstance(parcellation[0], np.ndarray):
+            masks = []
+            for i, arr in enumerate(parcellation):
+                _check_array(arr, idx=i)
+                _check_binary_mask(arr, idx=i)
+                masks.append(arr.astype(bool))
+            return _apply_ids(list(range(1, len(masks) + 1)), masks)
+
+    raise TypeError(
+        f"Unsupported parcellation type: {type(parcellation).__name__}. "
+        "Expected a NIfTI path, np.ndarray, or list of either."
+    )
