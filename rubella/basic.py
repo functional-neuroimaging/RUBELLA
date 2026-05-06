@@ -188,21 +188,18 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         IC_idx = list(range(ICs_arr.shape[0])) # take all ICs
 
     DR_dict = {}
-    DR_dict['DR_maps']={}
-    DR_dict['DR_time']={}
-    DR_dict['DR_amp']={}
-    DR_dict['DR_cross_corr']={}
     for img_id in img_id_list:
+        DR_dict[img_id] = {}
         timeseries = timeseries_dict[img_id]
         DR = dual_regression(ICs_arr, timeseries)
         DR_maps = DR['C']*DR['S']
-        DR_dict['DR_maps'][img_id]=DR_maps[:,IC_idx]
-        DR_dict['DR_amp'][img_id]=DR['S'][IC_idx]
-        DR_dict['DR_time'][img_id]=DR['W'][:,IC_idx]
+        DR_dict[img_id]['DR_maps']=DR_maps[:,IC_idx]
+        DR_dict[img_id]['DR_amp']=DR['S'][IC_idx]
+        DR_dict[img_id]['DR_time']=DR['W'][:,IC_idx]
         DR_corr = np.corrcoef(DR['W'][:,IC_idx].T)
         if z_corr:
             DR_corr = np.arctanh(DR_corr)
-        DR_dict['DR_cross_corr'][img_id]=DR_corr
+        DR_dict[img_id]['DR_cross_corr']=DR_corr
     return DR_dict
 
 
