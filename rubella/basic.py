@@ -370,16 +370,32 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
             idx_arr[censoring_mask] = np.arange(timeseries.shape[0])
             censoring = True
         else:
-            print(f'No censoring mask for {img_id}')
+            if not censoring_mask_dict=={}:
+                print(f'No censoring mask for {img_id}')
             nframes = timeseries.shape[0]
             idx_arr = np.arange(timeseries.shape[0])
             censoring_mask = np.ones(nframes, dtype=bool)
             censoring = False
         subject_meta[img_id] = (timeseries, censoring_mask, idx_arr, nframes, censoring)
 
-    # Use the first subject's nframes to drive the window loop
-    # (assumes all subjects have the same scan length)
-    nframes = subject_meta[img_id_list[0]][3]
+    # Verify all subjects have the same scan length
+    all_nframes = {img_id: subject_meta[img_id][3] for img_id in img_id_list}
+    unique_lengths = set(all_nframes.values())
+    if len(unique_lengths) > 1:
+        lengths_str = "\n".join(f"  {img_id}: {n} frames" for img_id, n in all_nframes.items())
+        import warnings
+        warnings.warn(
+            f"WARNING: Subjects have different scan lengths!\n"
+            f"The window loop will run up to the longest scan ({max(unique_lengths)} frames). "
+            f"Subjects with shorter scans will produce fewer windows at the end of the timeseries.\n"
+            f"Subject frame counts:\n{lengths_str}\n",
+            UserWarning, stacklevel=2
+        )
+
+    # Use the maximum scan length to drive the window loop, so that all timepoints
+    # are covered. Subjects with shorter scans will naturally produce fewer windows
+    # at the end as their timeseries runs out.
+    nframes = max(subject_meta[img_id][3] for img_id in img_id_list)
 
     i = 0
     while i <= (nframes - window_length):
