@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from .main import define_distance
 
 def plot_robustness(robustness, ax):
     D_l = []
@@ -71,7 +72,7 @@ def silhouette(X, caps, plot=False):
     # and 'b' is the distance relative to the nearest neighbor cluster
     
     labels = caps.labels_
-    sample_distances = caps.define_distance(caps.distance)(X,X)
+    sample_distances = define_distance(caps.distance)(X,X)
     sample_distances[np.where(sample_distances<0)] = 0 # clip negative values, which can happen with correlation because numerical instability
     np.fill_diagonal(sample_distances,0)
 
