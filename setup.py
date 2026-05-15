@@ -20,6 +20,7 @@ REQUIRES_PYTHON = '>=3.9.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
+    'pathlib',
     'matplotlib>=3.3.4',
     'nibabel>=3.2.1',
     'nilearn>=0.7.1',

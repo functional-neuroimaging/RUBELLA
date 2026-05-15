@@ -1,5 +1,6 @@
 import SimpleITK as sitk
 import pathlib
+from pathlib import Path
 import pandas as pd
 from .basic import load_img_to_array
 
@@ -11,7 +12,7 @@ class DataObject:
 
     Parameters
     ----------
-    brain_mask_file : str
+    brain_mask_file : str, pathlib.Path
         Full path to the brain mask Nifti file that will be used to load commonspace timeseries.
 
     timeseries_file_list : list
@@ -54,6 +55,7 @@ class DataObject:
 
     def __init__(self, timeseries_file_list, brain_mask_file, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
         # the brain mask file defines the voxel commonspace to load each volume
+        brain_mask_file = Path(brain_mask_file)
         self.brain_mask_file = brain_mask_file
         mask_img = sitk.ReadImage(brain_mask_file)
         volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
@@ -113,7 +115,7 @@ class DataObject:
         volume_idx = self.volume_idx
 
         for i in range(num_imgs):
-            file = timeseries_file_list[i]
+            file = Path(timeseries_file_list[i])
             if new_list:
                 img_id = pathlib.Path(file).name
                 if fname_split:
@@ -167,7 +169,8 @@ class DataObject:
                 del self.censoring_mask[img_id]
 
             for censoring_file in censoring_file_list:
-                if img_id in censoring_file:
+                censoring_file = Path(censoring_file)
+                if img_id in censoring_file.name:
                     if img_id in self.censoring_mask.keys():
                         raise ValueError(f"{img_id} is assigned to multiple censoring mask files - review the inputs and img_id_split.")
                     self.censoring_mask[img_id]=pd.read_csv(censoring_file)['False = Masked Frames'].values
@@ -222,7 +225,7 @@ class DataObject:
 
         Parameters
         ----------
-        img_file : str
+        img_file : str, pathlib.Path
             Path to the input Nifti file.
 
         input_is_mask : bool, default=False
