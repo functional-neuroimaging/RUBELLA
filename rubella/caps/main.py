@@ -250,19 +250,25 @@ class CAPs:
         labels = np.argmin(distances, axis=1)
         return labels
 
-    def var_explained(self,X, output_recon=False):
+    def estimate_R2(self,X, output_recon=False):
         if self.cluster_centers_ is None:
             raise ValueError("Cluster centroids have not been computed.")
+        if self.labels_ is None or len(self.labels_)!=X.shape[0]:
+            print("Computing new labels for X.")
+            labels = self.predict(X)
+        else:
+            labels = self.labels_
+
         # reconstruct data from labelsXcentroid
         recon_X = np.zeros(X.shape)
         for i in range(self.n_clusters):
-            recon_X[self.labels_==i]=self.cluster_centers_[i,:]
+            recon_X[labels==i]=self.cluster_centers_[i,:]
         res = X - recon_X
-        VE = 1-res.var()/X.var()
+        R2 = 1-res.var()/X.var()
         if output_recon:
-            return VE,recon_X
+            return R2,recon_X
         else:
-            return VE
+            return R2
 
 
 def custom_kmeans_single_rep(X, n_clusters, init="k-means++", distance='correlation', rep_num=1, max_iters=300, tol = 1e-4, random_state=None):
