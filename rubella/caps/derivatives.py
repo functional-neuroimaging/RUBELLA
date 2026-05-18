@@ -15,7 +15,7 @@ def convert_to_dwell_time(labels):
 
 
 def estimate_transitions(labels, censoring_mask=None, transition_step_size=1, exclude_steadystate=False):
-    if censoring_mask:
+    if censoring_mask is None:
         # because censored frames are set to -1, they are not counted in the transition counts below
         # censored frames break the transition estimation, until there is again two consecutive 
         # uncensored transitions
@@ -51,7 +51,7 @@ def estimate_transitions(labels, censoring_mask=None, transition_step_size=1, ex
 
 
 def estimate_transitions_3steps(labels, censoring_mask=None, exclude_steadystate=False):
-    if censoring_mask:
+    if censoring_mask is None:
         # because censored frames are set to -1, they are not counted in the transition counts below
         # censored frames break the transition estimation, until there is again two consecutive 
         # uncensored transitions
