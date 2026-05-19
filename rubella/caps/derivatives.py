@@ -14,7 +14,7 @@ def convert_to_dwell_time(labels):
     return result
 
 
-def estimate_transitions(labels, censoring_mask=None, transition_step_size=1, exclude_steadystate=False):
+def estimate_transitions(labels, k, censoring_mask=None, transition_step_size=1, exclude_steadystate=False):
     if censoring_mask is None:
         # because censored frames are set to -1, they are not counted in the transition counts below
         # censored frames break the transition estimation, until there is again two consecutive 
@@ -38,7 +38,6 @@ def estimate_transitions(labels, censoring_mask=None, transition_step_size=1, ex
         f"{x}_{y}" for x, y in zip(filled_labels[:-transition_step_size], filled_labels[transition_step_size:])
     ])
 
-    k = labels.max()+1
     transition_counts=np.zeros([k,k])
     for x in range(k):
         for y in range(k):
@@ -50,7 +49,7 @@ def estimate_transitions(labels, censoring_mask=None, transition_step_size=1, ex
     return transition_counts, transition_probability
 
 
-def estimate_transitions_3steps(labels, censoring_mask=None, exclude_steadystate=False):
+def estimate_transitions_3steps(labels, k, censoring_mask=None, exclude_steadystate=False):
     if censoring_mask is None:
         # because censored frames are set to -1, they are not counted in the transition counts below
         # censored frames break the transition estimation, until there is again two consecutive 
@@ -74,7 +73,6 @@ def estimate_transitions_3steps(labels, censoring_mask=None, exclude_steadystate
         f"{x}_{y}_{z}" for x, y, z in zip(filled_labels[:-2], filled_labels[1:-1], filled_labels[2:])
     ])
 
-    k = labels.max()+1
     transition_counts=np.zeros([k,k*k])
     for x in range(k):
         for y in range(k):
