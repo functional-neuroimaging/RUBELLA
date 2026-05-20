@@ -24,8 +24,8 @@ def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 
 
     for img_id in img_id_list:
         for window in sliding_window_dict['sliding_windows'][img_id]:
-            if not window.shape[0]==window_length:
-                raise ValueError(f"The function is expecting windows of length {window_length}, but a window of length {window.shape[0]} was found for scan id {img_id}")
+            if (window is not None) and (not window.shape[0]==window_length):
+                    raise ValueError(f"The function is expecting windows of length {window_length}, but a window of length {window.shape[0]} was found for scan id {img_id}")
 
     num_scan = len(img_id_list)
     num_windows_l = [len(sliding_window_dict['sliding_windows'][img_id]) for img_id in img_id_list]
@@ -43,12 +43,20 @@ def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 
 
     if starting_idx=='random':
         from random import randrange
-        starting_idx = randrange(num_windows_total)
+        template = None
+        while(template is None): # loop until a non-empty window is found
+            starting_idx = randrange(num_windows_total)
+            template = match_window_idx(starting_idx)
         print(f'Template initiated with random index {starting_idx}')
+    else:
+        template = match_window_idx(starting_idx)
+        if template is None:
+            raise ValueError(f"The window is empty at starting_idx {starting_idx}.")
+        
+    template = template.reshape(1,-1)
+
     if not isinstance(starting_idx, int):
         raise ValueError("starting_idx must be an integer.")
-
-    template = match_window_idx(starting_idx).reshape(1,-1)
 
     converge=False
     for i in range(max_iter):
@@ -56,7 +64,7 @@ def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 
         num_idx = 0
         new_template = np.zeros((0,template.shape[1]))
         for img_id in img_id_list:
-            windows = np.array(sliding_window_dict['sliding_windows'][img_id])
+            windows = np.array([window for window in sliding_window_dict['sliding_windows'][img_id] if window is not None]) # must exclude empty windows
             windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
             corrs=vcorrcoef(template, windows).flatten()
             idx = corrs>template_to_window_thresh # windows that pass threshold
@@ -98,7 +106,7 @@ def count_QPP_occurence(sliding_window_dict, QPP, template_to_window_thresh = 0.
     window_length = QPP.shape[0]
     QPP_counts_dict = {}
     for img_id in img_id_list:
-        windows = np.array(sliding_window_dict['sliding_windows'][img_id])
+        windows = np.array([window for window in sliding_window_dict['sliding_windows'][img_id] if window is not None]) # must exclude empty windows
         windows = windows.reshape(windows.shape[0],-1) # need to reshape to 2D
         corrs=vcorrcoef(template, windows).flatten()
         idx = corrs>template_to_window_thresh # windows that pass threshold
