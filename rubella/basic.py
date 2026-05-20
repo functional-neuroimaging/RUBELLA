@@ -302,7 +302,7 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
     return concat_timeseries
 
 
-def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, skip_censored_windows=False, fc_func=None, fc_kwargs={}):
+def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, min_censored_window_length=1, fc_func=None, fc_kwargs={}):
     """Extract sliding windows of fMRI timeseries data across subjects, with optional
     motion censoring support and optional per-window functional connectivity computation.
 
@@ -337,10 +337,11 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
     step_size : int, default=1
         Number of frames to advance between successive windows. Must be >= 1.
 
-    skip_censored_windows : bool, default=True
-        If True, discard any window that contains at least one censored frame, ensuring every
-        retained window has exactly ``window_length`` uncensored frames. If False, all windows
-        are kept regardless of how many frames were censored within them.
+    min_censored_window_length : int, default=1
+        This specifies the minimal actual length of each window (after applying censoring). Any
+        window that does not meet this threshold is replaced by None.
+        If min_censored_window_length = window_length, any window with 1 or more censored frame
+        is replaced with None.
 
     fc_func : callable, default=None
         A functional connectivity function to apply to each window's timeseries. Must follow
@@ -364,7 +365,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         ...     censoring_mask_dict=data_obj.censoring_mask,
         ...     window_length=360,   # 6 min at TR=1s
         ...     step_size=180,       # 3 min step
-        ...     skip_censored_windows=False,
+        ...     min_censored_window_length=1,
         ... )
 
         Compute seed-based connectivity within each window by passing ``fc_func``.
@@ -377,7 +378,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         ...     censoring_mask_dict=data_obj.censoring_mask,
         ...     window_length=360,
         ...     step_size=180,
-        ...     skip_censored_windows=False,
+        ...     min_censored_window_length=1,
         ...     fc_func=rubella.basic.seed_based_FC,
         ...     fc_kwargs={
         ...         'brain_mask_file': data_obj.brain_mask_file,
@@ -457,42 +458,51 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         window_ts_dict = {}
         window_idx_dict = {}
 
+        img_id_include = []
+        img_id_empty = []
         for img_id in img_id_list:
             timeseries, censoring_mask, idx_arr, _, censoring = subject_meta[img_id]
             window_censoring_mask = censoring_mask[i:i + window_length]
 
-            if (not skip_censored_windows) or (not censoring) or (window_censoring_mask.sum() == window_length):
+            if min_censored_window_length <= window_censoring_mask.sum(): # check if the minimum number of remaining frames is met
                 window_idx = idx_arr[i:i + window_length][window_censoring_mask].astype(int)
                 window_ts_dict[img_id] = timeseries[window_idx, :]
                 window_idx_dict[img_id] = window_idx
+                img_id_include.append(img_id)
+            else:
+                img_id_empty.append(img_id)
 
-        if window_ts_dict:  # at least one subject has a valid window at this position
-            if fc_func is not None:
-                fc_output = fc_func(
-                    timeseries_dict=window_ts_dict,
-                    img_id_list=list(window_ts_dict.keys()),
-                    **fc_kwargs
+        if fc_func is not None:
+            fc_output = fc_func(
+                timeseries_dict=window_ts_dict,
+                img_id_list=img_id_include,
+                **fc_kwargs
+            )
+
+            # Validate that fc_output keys match the expected img_ids for this window
+            expected_ids = set(window_ts_dict.keys())
+            returned_ids = set(fc_output.keys())
+            if expected_ids != returned_ids:
+                missing = expected_ids - returned_ids
+                unexpected = returned_ids - expected_ids
+                raise ValueError(
+                    f"fc_func '{fc_func.__name__}' returned unexpected keys at window position i={i}. "
+                    f"Missing img_ids: {missing if missing else 'none'}. "
+                    f"Unexpected img_ids: {unexpected if unexpected else 'none'}."
                 )
 
-                # Validate that fc_output keys match the expected img_ids for this window
-                expected_ids = set(window_ts_dict.keys())
-                returned_ids = set(fc_output.keys())
-                if expected_ids != returned_ids:
-                    missing = expected_ids - returned_ids
-                    unexpected = returned_ids - expected_ids
-                    raise ValueError(
-                        f"fc_func '{fc_func.__name__}' returned unexpected keys at window position i={i}. "
-                        f"Missing img_ids: {missing if missing else 'none'}. "
-                        f"Unexpected img_ids: {unexpected if unexpected else 'none'}."
-                    )
+            for img_id, fc_arr in fc_output.items():
+                sliding_window_dict['sliding_windows'][img_id].append(fc_arr)
+                sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
+        else:
+            for img_id, window_ts in window_ts_dict.items():
+                sliding_window_dict['sliding_windows'][img_id].append(window_ts)
+                sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
 
-                for img_id, fc_arr in fc_output.items():
-                    sliding_window_dict['sliding_windows'][img_id].append(fc_arr)
-                    sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
-            else:
-                for img_id, window_ts in window_ts_dict.items():
-                    sliding_window_dict['sliding_windows'][img_id].append(window_ts)
-                    sliding_window_dict['sliding_windows_idx'][img_id].append(window_idx_dict[img_id])
+        # also fill the empty slots so that there is always an entry for each window
+        for img_id in img_id_empty:
+            sliding_window_dict['sliding_windows'][img_id].append(None)
+            sliding_window_dict['sliding_windows_idx'][img_id].append(None)
 
         i += step_size
 
