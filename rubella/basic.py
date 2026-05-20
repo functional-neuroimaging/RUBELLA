@@ -2,6 +2,7 @@ import SimpleITK as sitk
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
 import os
+from pathlib import Path
 
 
 def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
@@ -16,10 +17,10 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
 
     Parameters
     ----------
-    img_file : str
+    img_file : str, pathlib.Path
         Path to the input Nifti file.
 
-    brain_mask_file : str
+    brain_mask_file : str, pathlib.Path
         Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
 
     input_is_mask : bool, default=False
@@ -31,6 +32,8 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
     img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
         The output image array.
     """
+    img_file = Path(img_file)
+    brain_mask_file = Path(brain_mask_file)
     sitk_img = sitk.ReadImage(img_file)
     dim = sitk_img.GetDimension()
 
@@ -49,7 +52,7 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
             tmppath = tempfile.mkdtemp()
             out_file = f"{tmppath}/resampled_mask.nii.gz"
             antsApplyTransforms(transforms = [], inverses = [], 
-                input_image = img_file, ref_image = brain_mask_file, output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
+                input_image = str(img_file), ref_image = str(brain_mask_file), output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
             sitk_img = sitk.ReadImage(out_file, sitk.sitkInt16)
             shutil.rmtree(tmppath)
         else:
@@ -82,7 +85,7 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
     timeseries_dict : dict, DataObject.timeseries_dict
         Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
 
-    brain_mask_file : str, DataObject.brain_mask_file
+    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
         The full path to the brain mask Nifti file.
 
     img_id_list : list, DataObject.img_id_list
@@ -102,7 +105,8 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
         Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
     """
 
-    if isinstance(seed_roi, np.ndarray) or os.path.isfile(seed_roi):
+    brain_mask_file = Path(brain_mask_file)
+    if isinstance(seed_roi, np.ndarray) or (not isinstance(seed_roi, np.ndarray) and Path(seed_roi).is_file()):
         seed_roi_arr = _parse_parcellation([seed_roi], brain_mask_file, roi_ids=None)[1]
     else:
         raise ValueError("seed_roi is neither an array nor a file.")
@@ -129,13 +133,13 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
     timeseries_dict : dict, DataObject.timeseries_dict
         Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
 
-    brain_mask_file : str, DataObject.brain_mask_file
+    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
         The full path to the brain mask Nifti file.
 
     img_id_list : list, DataObject.img_id_list
         List of image IDs that are keys for timeseries_dict
 
-    IC_maps : str, np.ndarray
+    IC_maps : str, pathlib.Path, np.ndarray
         The input ICA maps, can be either the full path to a Nifti file, 
         or a pre-loaded numpy array of shape n_ICsXn_voxels
     
@@ -167,13 +171,14 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
 
     """
 
+    brain_mask_file = Path(brain_mask_file)
     volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
 
     if isinstance(IC_maps, np.ndarray): # can take in a pre-loaded array as input
         if not volume_idx.sum()==IC_maps.shape[1]:
             raise ValueError("The input IC_maps array does not have the expected number of voxels in volume_idx.")
         ICs_arr = IC_maps
-    elif os.path.isfile(IC_maps):
+    elif Path(IC_maps).is_file():
         ICs_arr = load_img_to_array(IC_maps, brain_mask_file, input_is_mask=False)
     else:
         raise ValueError("IC_maps is neither an array nor a file.")
@@ -244,13 +249,13 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
     timeseries_dict : dict, DataObject.timeseries_dict
         Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
 
-    brain_mask_file : str, DataObject.brain_mask_file
+    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
         The full path to the brain mask Nifti file.
 
     img_id_list : list, DataObject.img_id_list
         List of image IDs that are keys for timeseries_dict.
 
-    parcellation : str, np.ndarray, or list
+    parcellation : str, pathlib.Path, np.ndarray, or list
         The input parcellation defining the ROIs. Accepted formats follow _parse_parcellation():
         a path to a multi-label NIfTI, a pre-loaded 1D integer array, a list of single-label
         NIfTI paths, or a list of pre-loaded binary 1D arrays.
@@ -523,6 +528,8 @@ def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
     -----
     Generated with Claude Sonnet 4.6 (Anthropic), claude.ai — May 2026.    
     """
+
+    brain_mask_file = Path(brain_mask_file)
 
     def _check_array(arr, idx=""):
         volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
