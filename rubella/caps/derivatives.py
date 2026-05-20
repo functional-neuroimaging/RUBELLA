@@ -1,6 +1,28 @@
 from itertools import groupby
 import numpy as np
 
+
+def get_caps_probs(X, caps, dist_thresh=None):
+    """
+    Returns the probability of occurence of each CAP within 
+    the input X.
+    dist_thresh can be set as a maximal distance threshold
+    to be counted as a valid data point to estimate probabilities.
+    """
+    distances = caps.transform(X)
+    labels = np.argmin(distances, axis=1)
+    if dist_thresh is not None:
+        thresh_idx = np.min(distances, axis=1)<dist_thresh
+        labels = labels[thresh_idx]
+
+    probs = []
+    total=len(labels)
+    k = caps.n_clusters
+    for i in range(k):
+        probs.append((labels==i).sum()/total)
+    return probs
+
+
 def convert_to_dwell_time(labels):
     """
     Replace each run of identical labels with its length.
