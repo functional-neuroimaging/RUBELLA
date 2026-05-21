@@ -236,7 +236,7 @@ def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
     return GC_dict
 
 
-def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellation, roi_ids=None, z_corr = False):
+def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellation, roi_ids=None, z_corr=False, parcellated=False):
     """
     Compute a parcellated functional connectivity matrix for each img_id within a timeseries_dict.
 
@@ -267,6 +267,12 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
     z_corr : bool, default=False
         Whether to output Fischer z transformed correlation values, instead of Pearson's r.
         Note that the diagonal is set to NaN after the transform is applied.
+        
+    parcellated : bool, default=False 
+        Whether the input time series are already parcellated rather than being voxelwise.
+        If parcellated=True, each entry in timeseries_dict must have shape (timepoints × ROIs).
+        If parcellated=True, parcellation, brain_mask_file and roi_ids are not used by the function. 
+        Moreover, 'parcel_ids' is not an entry in the putput dictionary.       
 
     Returns
     -------
@@ -277,22 +283,25 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
         'matrix' : np.ndarray of shape n_parcels x n_parcels
             The functional connectivity matrix for that subject. The diagonal is NaN.
     """
-    
-    parcels_d = _parse_parcellation(parcellation, brain_mask_file, roi_ids=roi_ids)
-    parcel_ids = list(parcels_d.keys())
+    if not parcellated:
+        parcels_d = _parse_parcellation(parcellation, brain_mask_file, roi_ids=roi_ids)
+        parcel_ids = list(parcels_d.keys())
 
     FCM_dict = {}
     for img_id in img_id_list:
         FCM_dict[img_id] = {}
-        FCM_dict[img_id]['parcel_ids'] = parcel_ids
-        parcellated_timeseries = np.array([timeseries_dict[img_id][:,parcels_d[p]].mean(axis=1) for p in parcel_ids])
+        if parcellated:
+            parcellated_timeseries = timeseries_dict[img_id].T
+        else:
+            FCM_dict[img_id]['parcel_ids'] = parcel_ids #i moved it here, else parcel_ids is not defined for parcellated=True
+            parcellated_timeseries = np.array([timeseries_dict[img_id][:,parcels_d[p]].mean(axis=1) for p in parcel_ids])
         corr_matrix = np.corrcoef(parcellated_timeseries)
         if z_corr:
             corr_matrix = np.arctanh(corr_matrix)
         np.fill_diagonal(corr_matrix, np.nan)
         FCM_dict[img_id]['matrix'] = corr_matrix
     return FCM_dict
-
+    
 
 def get_concat_timeseries(timeseries_dict, img_id_list):
     concat_timeseries = timeseries_dict[img_id_list[0]]
