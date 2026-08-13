@@ -1,25 +1,27 @@
 import numpy as np
 from .cluster import kmeans, define_distance, pairwise_correlations
 
-def find_best_pairs(X,Y):
+def find_best_pairs(X, Y):
     sim = pairwise_correlations(X, Y)
     shape = sim.shape
-    if not shape[0]==shape[1]:
+    if not shape[0] == shape[1]:
         raise ValueError("A square similarity matrix is expected.")
     d = shape[0]
     idx_pairs = []
-    top_sims=np.zeros(d)
+    top_sims = np.zeros(d)
     i_idx = list(range(d))
     j_idx = list(range(d))
     for c in range(d):
-        i,j = np.where(sim==sim.max()) # next best pair
-        idx_pair = [i_idx.pop(i[0]),j_idx.pop(j[0])]
+        i, j = np.where(sim == sim.max())  # next best pair
+        i0, j0 = i[0], j[0]                # deterministically take the first match, in case of a tie
+        idx_pair = [i_idx.pop(i0), j_idx.pop(j0)]
         idx_pairs.append(idx_pair)
-        top_sims[idx_pair[0]] = sim[i,j]
+        top_sims[idx_pair[0]] = sim[i0, j0]
         # Remove pair
-        sim = np.delete(sim, i, axis=0)
-        sim = np.delete(sim, j, axis=1)
-    return idx_pairs,top_sims
+        sim = np.delete(sim, i0, axis=0)
+        sim = np.delete(sim, j0, axis=1)
+    return idx_pairs, top_sims
+
 
 def reorder_hierarchical(centroids): # re-order the list of centroids using hierarchical clustering
     from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list
@@ -75,7 +77,7 @@ class CAPs:
         self.distance = distance
         self.n_rep = n_rep #the number of replicates is num of times to repeat with new initial cluster positions (like n_init in scikit-learn)
         self.max_iter = max_iter #number of iterations in each replicate
-        self.tol = tol #convergence tolerance (Frobenius norm between consecutive centroids)
+        self.tol = tol 
         self.random_state = random_state # if a integer is provided, then the series of random state is deterministic
         self.centroid_order = centroid_order
         self.cluster_centers_ = None

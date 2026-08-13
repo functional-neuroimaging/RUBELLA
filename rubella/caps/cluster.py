@@ -130,7 +130,7 @@ def init_centroids(X,n_clusters,init,random_state):
         expected_shape = (n_clusters,X.shape[1])
         if not init.shape==expected_shape:
             raise ValueError(f"The inputed cluster centroids of shape {init.shape} does not match the expected shape of {expected_shape}.")
-        centroids = init
+        centroids = init.copy()  # avoid mutating the caller's array via pre_normalize_distance's in-place ops        
     else:
         raise ValueError(f"init must be 'k-means++', 'random' or a numpy array providing a cluster initialization. Instead {init} was found.")
     return centroids
@@ -170,6 +170,6 @@ def kmeans_single_rep(X, n_clusters, init="k-means++", distance='correlation', r
         else:
             print("\r", f"Initialization #{str(rep_num)} - iteration {str(iter_count)}: {reassigned_frac:.2%} of labels reassigned", end="")
 
-    # Calculate within-cluster mean of point-to-centroid distances (inertia)
-    inertia = np.mean([np.mean((X[labels == i] - M[i])**2) for i in range(n_clusters)])
+    # Calculate within-cluster sum of point-to-centroid distances (inertia)
+    inertia = np.sum([np.sum((X[labels == i] - M[i])**2) for i in range(n_clusters)])
     return M, labels, inertia
