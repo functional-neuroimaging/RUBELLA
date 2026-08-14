@@ -421,6 +421,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
 
     sliding_window_dict = {}
     sliding_window_dict['sliding_windows'] = {img_id: [] for img_id in img_id_list}
+    sliding_window_dict['window_censoring_mask'] = {img_id: [] for img_id in img_id_list}
     sliding_window_dict['sliding_windows_idx'] = {img_id: [] for img_id in img_id_list}
 
     # Build per-subject index arrays once, outside the window loop
@@ -472,6 +473,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         for img_id in img_id_list:
             timeseries, censoring_mask, idx_arr, _, censoring = subject_meta[img_id]
             window_censoring_mask = censoring_mask[i:i + window_length]
+            sliding_window_dict['window_censoring_mask'][img_id].append(window_censoring_mask)
 
             if min_censored_window_length <= window_censoring_mask.sum(): # check if the minimum number of remaining frames is met
                 window_idx = idx_arr[i:i + window_length][window_censoring_mask].astype(int)
