@@ -1,54 +1,27 @@
 import numpy as np
-from sklearn.metrics.pairwise import euclidean_distances
+from .cluster import kmeans, define_distance, pairwise_correlations, pre_normalize_distance
 
-
-def pairwise_correlations(X, Y):  # return a correlation between each row of X with each row of Y
-    # implementation is faster than sklearn.metrics.pairwise_distances
-    X_ = X.T.copy()
-    Y_ = Y.T.copy()
-    X_ -= X_.mean(axis=0)
-    Y_ -= Y_.mean(axis=0)
-    r_num = X_.T.dot(Y_)
-    r_den = np.sqrt(np.sum((X_)**2, axis=0).reshape(-1,1)*np.sum((Y_)**2, axis=0).reshape(1,-1))
-    r = r_num/r_den
-    return r
-
-def correlation_distances(X, Y):
-    return 1 - pairwise_correlations(X, Y)
-
-def cosine_similarity(X,Y): 
-    # estimate cosine similarity across the columns of X and Y
-    # implementation similar speed as sklearn.metrics.pairwise_distances
-    X_ = X.T.copy()
-    X_ /= np.sqrt((X_ ** 2).sum(axis=0)) # first normalize from l2-norm
-    Y_ = Y.T.copy()
-    Y_ /= np.sqrt((Y_ ** 2).sum(axis=0)) # first normalize from l2-norm
-
-    Sc = (X_.T.dot(Y_)) # then derive vector product
-    return Sc
-
-def cosine_distances(X,Y): 
-    return 1 - cosine_similarity(X,Y)
-
-def find_best_pairs(X,Y):
+def find_best_pairs(X, Y):
     sim = pairwise_correlations(X, Y)
     shape = sim.shape
-    if not shape[0]==shape[1]:
+    if not shape[0] == shape[1]:
         raise ValueError("A square similarity matrix is expected.")
     d = shape[0]
     idx_pairs = []
-    top_sims=np.zeros(d)
+    top_sims = np.zeros(d)
     i_idx = list(range(d))
     j_idx = list(range(d))
     for c in range(d):
-        i,j = np.where(sim==sim.max()) # next best pair
-        idx_pair = [i_idx.pop(i[0]),j_idx.pop(j[0])]
+        i, j = np.where(sim == sim.max())  # next best pair
+        i0, j0 = i[0], j[0]                # deterministically take the first match, in case of a tie
+        idx_pair = [i_idx.pop(i0), j_idx.pop(j0)]
         idx_pairs.append(idx_pair)
-        top_sims[idx_pair[0]] = sim[i,j]
+        top_sims[idx_pair[0]] = sim[i0, j0]
         # Remove pair
-        sim = np.delete(sim, i, axis=0)
-        sim = np.delete(sim, j, axis=1)
-    return idx_pairs,top_sims
+        sim = np.delete(sim, i0, axis=0)
+        sim = np.delete(sim, j0, axis=1)
+    return idx_pairs, top_sims
+
 
 def reorder_hierarchical(centroids): # re-order the list of centroids using hierarchical clustering
     from scipy.cluster.hierarchy import dendrogram, linkage, leaves_list
@@ -97,14 +70,80 @@ def reorder_Cmodes(centroids,labels):
     return reordered_idx        
 
 class CAPs:
-    # original code for this class taken from https://github.com/CoBrALab/mousefmri_acq_publication/blob/main/3_clustering/CAP_functions.py
-    def __init__(self, n_clusters, init="k-means++", distance='correlation', n_rep=1, max_iters=300, tol = 1e-4, random_state=None, centroid_order = 'Cmodes'):
+    """Co-Activation Pattern (CAP) clustering via k-means, supporting correlation, cosine, or
+    Euclidean distance.
+
+    For 'correlation'/'cosine' distance, clustering is amplitude-blind by design: samples are
+    compared based on their (per-sample) shape rather than absolute magnitude. Internally, this
+    is achieved by z-scoring (correlation) or L2-normalizing (cosine) each sample before running
+    k-means with Euclidean distance -- mathematically equivalent to correlation/cosine-based
+    clustering, but able to use fast, compiled Euclidean distance routines. As a consequence,
+    cluster_centers_ is returned in that same normalized space (zero-mean/unit-variance per row
+    for 'correlation', unit-norm per row for 'cosine'), not in the original data's raw units.
+    For 'euclidean' distance, no normalization is applied and centroids remain in the original
+    data scale.
+
+    Parameters
+    ----------
+    n_clusters : int
+        The number of clusters (CAPs) to identify.
+
+    init : str or np.ndarray, default='k-means++'
+        Method for centroid initialization: 'k-means++', 'random', or a pre-defined np.ndarray
+        of shape (n_clusters, n_features) providing the initial centroids directly.
+
+    distance : str, default='correlation'
+        The distance metric used for clustering: one of 'correlation', 'cosine', or 'euclidean'.
+
+    n_rep : int, default=1
+        Number of times k-means is run with different centroid initializations (equivalent to
+        sklearn's n_init). The repetition with the lowest inertia is kept as the final solution.
+
+    max_iter : int, default=300
+        Maximum number of iterations allowed within a single repetition.
+
+    tol : float, default=0.001
+        Convergence tolerance, expressed as the fraction of samples reassigned to a different
+        cluster between consecutive iterations. A repetition is considered converged once this
+        fraction drops to or below tol.
+
+    random_state : int, np.random.RandomState, or None, default=None
+        Controls the randomness of centroid initialization. Pass an int for reproducible results.
+
+    centroid_order : str or None, default='Cmodes'
+        Method used to reorder clusters after fitting: one of 'hierarchical', 'Cmodes', or None
+        (no reordering). See order_centroids_().
+
+    Attributes
+    ----------
+    cluster_centers_ : np.ndarray of shape (n_clusters, n_features)
+        The fitted cluster centroids, in the same (possibly normalized) space as `distance` --
+        see the class description above.
+
+    labels_ : np.ndarray of shape (n_samples,)
+        Cluster assignment for each sample in the data used to fit the model.
+
+    inertia_ : float
+        Sum of squared distances of samples to their assigned centroid, for the best repetition.
+
+    cross_rep_sim : np.ndarray or None
+        Similarity of each non-best repetition's centroids to the best repetition's centroids.
+        Set only when n_rep > 1. See cross_rep_robustness().
+
+    Notes
+    -----
+    This class was first inspired from the code found under
+    https://github.com/CoBrALab/mousefmri_acq_publication/blob/main/3_clustering/CAP_functions.py
+
+    Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+    """
+    def __init__(self, n_clusters, init="k-means++", distance='correlation', n_rep=1, max_iter=300, tol = 0.001, random_state=None, centroid_order = 'Cmodes'):
         self.n_clusters = n_clusters
         self.init = init
         self.distance = distance
         self.n_rep = n_rep #the number of replicates is num of times to repeat with new initial cluster positions (like n_init in scikit-learn)
-        self.max_iters = max_iters #number of iterations in each replicate
-        self.tol = tol #convergence tolerance (Frobenius norm between consecutive centroids)
+        self.max_iter = max_iter #number of iterations in each replicate
+        self.tol = tol 
         self.random_state = random_state # if a integer is provided, then the series of random state is deterministic
         self.centroid_order = centroid_order
         self.cluster_centers_ = None
@@ -112,83 +151,41 @@ class CAPs:
         self.inertia_ = None
         self.cross_rep_sim = None
 
-    def init_centroids(self, X,n_clusters,init,random_state):
-        if isinstance(init, str) and init == "k-means++":
-            from sklearn.cluster._kmeans import kmeans_plusplus
-            centroids, _ = kmeans_plusplus(
-                X,n_clusters,random_state=random_state,
-                x_squared_norms=None,
-                n_local_trials=None,
-            )
-        elif isinstance(init, str) and init == "random":
-            # centroids are initialized as a random volume from the input data
-            centroids = X[random_state.choice(X.shape[0], n_clusters, replace=False)]
-        elif isinstance(init, np.ndarray):
-            expected_shape = (n_clusters,X.shape[1])
-            if not init.shape==expected_shape:
-                raise ValueError(f"The inputed cluster centroids of shape {init.shape} does not match the expected shape of {expected_shape}.")
-            centroids = init
-        else:
-            raise ValueError(f"init must be 'k-means++', 'random' or a numpy array providing a cluster initialization. Instead {init} was found.")
-        return centroids
+    def fit_kmeans(self, X, copy_X=False):
+        """Fit the k-means clustering model to the input data.
 
-    def define_distance(self, distance):
-        if isinstance(distance, str) and distance == "correlation":
-            return correlation_distances
-        elif isinstance(distance, str) and distance == "euclidean":
-            return euclidean_distances
-        elif isinstance(distance, str) and distance == "cosine":
-            return cosine_distances
-        else:
-            raise ValueError(f"distance must be one of 'correlation','euclidean'")
-                
-    def fit_kmeans(self, X):
-        best_labels, best_centroids, best_inertia = None, None, np.inf
-        
-        compute_distance = self.define_distance(self.distance)
-        
-        from sklearn.utils import check_random_state
-        random_state = check_random_state(self.random_state)
-        
-        centroids_rep = []
-        for rep in range(self.n_rep):
-            centroids = self.init_centroids(X,self.n_clusters,self.init,random_state)
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            The data to cluster (e.g. timepoints x voxels).
 
-            iter_count = 0 
-            centers_squared_diff = 1
-            #iteratively update the location of the centroid until the number of max iterations is reached, or centroid location barely changes (tolerance)
-            while (centers_squared_diff > self.tol) and (iter_count < self.max_iters):
-                # Assign each data point to the nearest centroid based on correlation distance
-                distances = compute_distance(X=X, Y=centroids)
-                labels = np.argmin(distances, axis=1)
+        copy_X : bool, default=False
+            If False, X is temporarily normalized in place during fitting (and restored to its
+            original values afterward) to save memory. If True, a copy of X is made instead,
+            leaving the caller's original array untouched throughout -- at the cost of doubling
+            memory use for the duration of the fit.
 
-                # Update centroids based on the mean of assigned data points
-                centroids_new = np.array([X[labels == i].mean(axis=0) for i in range(self.n_clusters)])
+        Returns
+        -------
+        self : CAPs
+            The fitted CAPs object, with cluster_centers_, labels_, inertia_ (and, if n_rep>1,
+            cross_rep_sim) set.
 
-                #compute the tolerance (how different the new centroids are compared to the previous iteration) using squared Frobenius norm
-                centers_squared_diff = np.sum((centroids_new - centroids) ** 2)
-                centroids = centroids_new
-                
-                #update the iteration number
-                iter_count = iter_count + 1
-                
-                #print the convergence situation
-                if centers_squared_diff <= self.tol:
-                    print("\nInitialization #" + str(rep+1) + " converged on iteration " + str(iter_count) + " as tolerance of " + str(centers_squared_diff) + " was reached.")
-                elif iter_count == self.max_iters:
-                    print("\nInitialization #" + str(rep+1) + " converged at max iteration " + str(iter_count) + " at tolerance of " + str(centers_squared_diff) + ".")
-                else:
-                    print("\r",f"Initialization #{str(rep+1)} - iteration {str(iter_count)}: tolerance = {str(centers_squared_diff)}", end="")
+        Notes
+        -----
+        Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+        """
+        best_centroids, best_labels, best_inertia, centroids_rep = kmeans(
+            X, 
+            self.n_clusters, 
+            init=self.init, 
+            distance=self.distance, 
+            n_rep=self.n_rep, 
+            max_iter=self.max_iter, 
+            tol = self.tol, 
+            random_state=self.random_state, 
+            copy_X=copy_X)
 
-            # Calculate within-cluster sums of point-to-centroid distances (inertia)
-            inertia = np.sum([np.sum((X[labels == i] - centroids[i])**2) for i in range(self.n_clusters)])
-
-            # Update best solution if the current one has lower inertia
-            if inertia < best_inertia:
-                best_labels, best_centroids, best_inertia = labels, centroids, inertia
-                centroids_rep = [centroids] + centroids_rep # the best centroid will be at idx 0
-            else:
-                centroids_rep.append(centroids)
         self.labels_ = best_labels
         self.cluster_centers_ = best_centroids
         self.inertia_ = best_inertia
@@ -196,7 +193,6 @@ class CAPs:
             self.cross_rep_robustness(centroids_rep)
         if not self.centroid_order is None:
             self.order_centroids_()
-        
         return self
 
     def cross_rep_robustness(self, centroids_list):
@@ -232,30 +228,167 @@ class CAPs:
         if self.n_rep>1:
             self.cross_rep_sim = self.cross_rep_sim[:,reordered_idx]
             
-    def transform(self, X, distance=None):  # derive cluster distance from new data
+    def transform(self, X):
+        """Compute the distance from each sample in X to each fitted cluster centroid.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            New data to compute distances for. Can be passed in raw (un-normalized) form: for
+            'correlation'/'cosine' distance, the underlying distance functions normalize both X
+            and the centroids internally, so no pre-normalization is required here.
+
+        Returns
+        -------
+        distances : np.ndarray of shape (n_samples, n_clusters)
+            The pairwise distance between each sample and each cluster centroid.
+
+        Notes
+        -----
+        Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+        """
         if self.cluster_centers_ is None:
             raise ValueError("Cluster centroids have not been computed.")
-        if distance is None:
-            distance = self.distance
-        compute_distance = self.define_distance(distance)
+        compute_distance = define_distance(self.distance)
         distances = compute_distance(X=X, Y=self.cluster_centers_)
         return distances
     
-    def predict(self, X):  # assign cluster labels to new data
+    def predict(self, X):
+        """Assign each sample in X to its nearest cluster.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            New data to assign to clusters. Can be passed in raw (un-normalized) form -- see
+            transform().
+
+        Returns
+        -------
+        labels : np.ndarray of shape (n_samples,)
+            The index of the nearest cluster for each sample.
+
+        Notes
+        -----
+        Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+        """
         distances = self.transform(X)
         labels = np.argmin(distances, axis=1)
         return labels
 
-    def var_explained(self,X, output_recon=False):
+    def reconstruct_timeseries(self, X, prenormalize_X=True):
+        """Reconstruct each sample as a scaled version of its assigned cluster centroid.
+        A per-sample scalar coefficient is fit by least squares: 
+        for each sample x_i assigned to cluster j with centroid m_j, the coefficient c_i 
+        minimizing ||x_i - c_i * m_j||^2 is found.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            The data to reconstruct.
+
+        prenormalize_X : bool, default=True
+            If True, X is normalized the same way as cluster_centers_ (z-scored per sample for
+            'correlation', L2-normalized per sample for 'cosine', unchanged for 'euclidean')
+            before reconstruction, so that X and cluster_centers_ are in a comparable scale.
+            Leave this as True unless X has already been normalized this way beforehand. 
+            This is especially critical for 'correlation' distance: leaving this False will 
+            produce a misleading reconstruction, since a zero-mean centroid cannot explain a 
+            non-zero-mean signal through a scalar multiple alone.
+
+        Returns
+        -------
+        recon : np.ndarray of shape (n_samples, n_features)
+            The reconstructed data, i.e. coeffs[:, None] * cluster_centers_[labels].
+
+        coeffs : np.ndarray of shape (n_samples,)
+            The per-sample scalar coefficient fit for each sample's assigned centroid.
+
+        labels : np.ndarray of shape (n_samples,)
+            The cluster assignment used for reconstruction (self.labels_ if it matches X in
+            length, otherwise freshly computed via predict(X)).
+
+        X : np.ndarray of shape (n_samples, n_features)
+            The data actually used for the reconstruction/coefficient fit -- identical to the
+            input if prenormalize_X=False, otherwise the normalized version.
+
+        Notes
+        -----
+        Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+        """
         if self.cluster_centers_ is None:
             raise ValueError("Cluster centroids have not been computed.")
-        # reconstruct data from labelsXcentroid
-        recon_X = np.zeros(X.shape)
-        for i in range(self.n_clusters):
-            recon_X[self.labels_==i]=self.cluster_centers_[i,:]
-        res = X - recon_X
-        VE = 1-res.var()/X.var()
-        if output_recon:
-            return VE,recon_X
+
+        if prenormalize_X:  # normalize X to match the centroids, which are normalized
+            X, _, _ = pre_normalize_distance(X.copy(), self.distance)
+
+        if self.labels_ is None or len(self.labels_)!=X.shape[0]:
+            print("Computing new labels for X.")
+            labels = self.predict(X)
         else:
-            return VE
+            labels = self.labels_
+
+        coeffs = np.empty(X.shape[0])
+        for j in range(self.n_clusters):
+            idx = np.where(labels == j)[0]
+            if len(idx) == 0:
+                continue
+
+            A = self.cluster_centers_[j].reshape(-1, 1)                      # (P, 1) design
+            B = X[idx].T                                         # (P, n_j) targets
+            c_j, *_ = np.linalg.lstsq(A, B, rcond=None)          # correct for any ||m_j||
+            coeffs[idx] = c_j
+
+        recon = coeffs[:, None] * self.cluster_centers_[labels]
+        return recon, coeffs, labels, X
+
+    def estimate_R2(self,X, prenormalize_X=True):
+        """Estimate how well the fitted clustering explains the variance in X.
+
+        For each sample, R2 is computed from the residual of its scaled-centroid reconstruction
+        (see reconstruct_timeseries()) relative to that sample's total sum of squares, then
+        aggregated per cluster and overall.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            The data to evaluate.
+
+        prenormalize_X : bool, default=True
+            Whether to normalize X to match cluster_centers_ before reconstruction -- see
+            reconstruct_timeseries(). Should be left as True for 'correlation'/'cosine'
+            distance; leaving X un-normalized will produce a misleadingly low R2.
+
+        Returns
+        -------
+        r2_per_cluster : np.ndarray of shape (n_clusters,)
+            R2 computed over the samples assigned to each cluster. NaN for any cluster with no
+            assigned samples.
+
+        r2_overall : float
+            R2 computed over all samples jointly.
+
+        recon : np.ndarray of shape (n_samples, n_features)
+            The reconstructed data returned by reconstruct_timeseries().
+
+        Notes
+        -----
+        Docstring generated with Claude Sonnet 5 (Anthropic), claude.ai — August 2026.    
+        """
+        recon, coeffs, labels, X = self.reconstruct_timeseries(X, prenormalize_X=prenormalize_X)
+
+        resid = X - recon
+
+        X_SS = np.sum(X ** 2, axis=1)
+        res_SS = np.sum(resid ** 2, axis=1)
+
+        k = self.n_clusters
+        r2_per_cluster = np.full(k, np.nan)
+        for j in range(k):
+            idx = np.where(labels == j)[0]
+            if len(idx) == 0:
+                continue
+            r2_per_cluster[j] = 1.0 - res_SS[idx].sum() / X_SS[idx].sum()
+
+        r2_overall = 1.0 - res_SS.sum() / X_SS.sum()
+
+        return r2_per_cluster, r2_overall, recon

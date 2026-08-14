@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from .cluster import define_distance, correlation_distances
 
 def plot_robustness(robustness, ax):
     D_l = []
@@ -71,7 +72,7 @@ def silhouette(X, caps, plot=False):
     # and 'b' is the distance relative to the nearest neighbor cluster
     
     labels = caps.labels_
-    sample_distances = caps.define_distance(caps.distance)(X,X)
+    sample_distances = define_distance(caps.distance)(X,X)
     sample_distances[np.where(sample_distances<0)] = 0 # clip negative values, which can happen with correlation because numerical instability
     np.fill_diagonal(sample_distances,0)
 
@@ -124,7 +125,7 @@ def silhouette(X, caps, plot=False):
 
 
 def cluster2data_corr(X, caps, corr_threshold = 0.5):
-    distances = caps.transform(X, distance='correlation') # using correlation so its interpretable across methods
+    distances = correlation_distances(X=X, Y=caps.cluster_centers_) # using correlation so its interpretable across methods
     cluster_corr = (distances - 1)*-1 # convert back to correlation
     labels = np.argmin(distances, axis=1)
     within_cluster_corr = [cluster_corr[:,i][labels==i] for i in range(labels.max()+1)] # compute centroid correlation from each point within a cluster
@@ -174,7 +175,13 @@ def plot_cluster2data_corr(X, caps, corr_threshold = 0.5):
 
 
 def stability_report(caps_l, X, k_range, pass_threshold=0.5):
-    VE = [caps.var_explained(X) for caps in caps_l]
+
+    for caps in caps_l:
+        if caps.labels_ is None or len(caps.labels_)!=X.shape[0]:
+            print("\r","Changing labels to match input X.", end="")
+            caps.labels_ = caps.predict(X)
+
+    VE = [caps.estimate_R2(X) for caps in caps_l]
     robustness = [caps.cross_rep_sim for caps in caps_l]
     from sklearn.metrics import calinski_harabasz_score
     var_ratio = [calinski_harabasz_score(X, caps.labels_) for caps in caps_l]
@@ -187,7 +194,7 @@ def stability_report(caps_l, X, k_range, pass_threshold=0.5):
     fig1,axes = plt.subplots(1,4, figsize=(12,3), constrained_layout = True)
     axes[0].plot(k_range, VE)
     axes[0].set_xlabel('Number of clusters', fontsize=12)
-    axes[0].set_ylabel('Variance explained', fontsize=12)
+    axes[0].set_ylabel('Variance explained (R2)', fontsize=12)
     axes[0].set_ylim([0,1])
 
     axes[1].plot(k_range, var_ratio)

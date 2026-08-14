@@ -189,13 +189,13 @@ def plot_many_brains(
         # flip order to plot from front to back, or top to bottom
         selected_slices = selected_slices[::-1]
 
+    num_plots = len(data_list)
     if not fig and not ax_list: # automatically generate the plot if none is provided
 
         # estimate the bounding box dimension for a single plot using the brain mask
         mask_img = sitk.ReadImage(brain_mask_file)
         slices,bbox_physical_dimensions = gen_slices_array(mask_img,selected_slices,slices_per_row,threshold=None, plane=plane)
 
-        num_plots = len(data_list)
         import math
         num_rows = math.ceil(num_plots/num_brain_per_row)
 
