@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from .main import define_distance
+from .cluster import define_distance, correlation_distances
 
 def plot_robustness(robustness, ax):
     D_l = []
@@ -125,7 +125,7 @@ def silhouette(X, caps, plot=False):
 
 
 def cluster2data_corr(X, caps, corr_threshold = 0.5):
-    distances = caps.transform(X, distance='correlation') # using correlation so its interpretable across methods
+    distances = correlation_distances(X=X, Y=caps.cluster_centers_) # using correlation so its interpretable across methods
     cluster_corr = (distances - 1)*-1 # convert back to correlation
     labels = np.argmin(distances, axis=1)
     within_cluster_corr = [cluster_corr[:,i][labels==i] for i in range(labels.max()+1)] # compute centroid correlation from each point within a cluster
