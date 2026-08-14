@@ -21,9 +21,7 @@ def get_group_stats(FC_map_dict, avg_type='median', top_percent=10):
     tstat_data = data_array.mean(axis=0)/(std_FC/np.sqrt(n))
     tstat_data[np.isnan(tstat_data)]=0
 
-    mask_l = get_threshold_masks(FC_map_dict, top_percent=top_percent)
-    mask_l = np.array(mask_l)
-    percent_overlap = (mask_l.sum(axis=0)/mask_l.shape[0])*100    
+    percent_overlap = get_avg(FC_map_dict, avg_type='percent_overlap', top_percent=top_percent)
 
     return tstat_data, avg_FC, std_FC, percent_overlap
 
