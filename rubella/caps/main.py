@@ -1,5 +1,5 @@
 import numpy as np
-from .cluster import kmeans, define_distance, pairwise_correlations
+from .cluster import kmeans, define_distance, pairwise_correlations, pre_normalize_distance
 
 def find_best_pairs(X, Y):
     sim = pairwise_correlations(X, Y)
@@ -153,22 +153,50 @@ class CAPs:
         labels = np.argmin(distances, axis=1)
         return labels
 
-    def estimate_R2(self,X, output_recon=False):
+    def reconstruct_timeseries(self, X, prenormalize_X=True):
         if self.cluster_centers_ is None:
             raise ValueError("Cluster centroids have not been computed.")
+        if prenormalize_X: # normalize X to match the centroids which are normalized
+            X, _, _ = pre_normalize_distance(X.copy(), self.distance)
         if self.labels_ is None or len(self.labels_)!=X.shape[0]:
             print("Computing new labels for X.")
             labels = self.predict(X)
         else:
             labels = self.labels_
 
-        # reconstruct data from labelsXcentroid
-        recon_X = np.zeros(X.shape)
-        for i in range(self.n_clusters):
-            recon_X[labels==i]=self.cluster_centers_[i,:]
-        res = X - recon_X
-        R2 = 1-res.var()/X.var()
-        if output_recon:
-            return R2,recon_X
-        else:
-            return R2
+        coeffs = np.empty(X.shape[0])
+        for j in range(self.n_clusters):
+            idx = np.where(labels == j)[0]
+            if len(idx) == 0:
+                continue
+
+            A = self.cluster_centers_[j].reshape(-1, 1)                      # (P, 1) design
+            B = X[idx].T                                         # (P, n_j) targets
+            c_j, *_ = np.linalg.lstsq(A, B, rcond=None)          # correct for any ||m_j||
+            coeffs[idx] = c_j
+
+        recon = coeffs[:, None] * self.cluster_centers_[labels]
+        return recon, coeffs, labels
+
+    def estimate_R2(self,X, prenormalize_X=True):
+        if prenormalize_X: # normalize X to match the centroids which are normalized
+            X, _, _ = pre_normalize_distance(X.copy(), self.distance)
+
+        recon, coeffs, labels = self.reconstruct_timeseries(X, prenormalize_X=False)
+
+        resid = X - recon
+
+        X_SS = np.sum(X ** 2, axis=1)
+        res_SS = np.sum(resid ** 2, axis=1)
+
+        k = self.n_clusters
+        r2_per_cluster = np.full(k, np.nan)
+        for j in range(k):
+            idx = np.where(labels == j)[0]
+            if len(idx) == 0:
+                continue
+            r2_per_cluster[j] = 1.0 - res_SS[idx].sum() / X_SS[idx].sum()
+
+        r2_overall = 1.0 - res_SS.sum() / X_SS.sum()
+
+        return r2_per_cluster, r2_overall, recon
