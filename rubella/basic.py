@@ -198,6 +198,10 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         DR_corr = np.corrcoef(DR['W'][:,IC_idx].T)
         if z_corr:
             DR_corr = np.arctanh(DR_corr)
+        if len(IC_idx)>1: # it raises an error is array is 1 row
+            np.fill_diagonal(DR_corr, np.nan)
+        else:
+            DR_corr = np.nan
         DR_dict[img_id]['DR_cross_corr']=DR_corr
     return DR_dict
 
