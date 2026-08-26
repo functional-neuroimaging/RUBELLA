@@ -58,8 +58,10 @@ def plot_brain(data,brain_mask_file,template_file=None,
     vmin : float
         The minimum value for the colormap. If None, it is set to -vmax.
 
-    alpha : float
+    alpha : float, np.ndarray
         The transparency level of the brain map overlay. Must be between 0 and 1.
+        It can be an array of the same shape as data to provide a per voxel alpha
+        value.
 
     plot_cbar : bool
         Whether to plot a colorbar.
@@ -74,7 +76,16 @@ def plot_brain(data,brain_mask_file,template_file=None,
     top_percent : float
         The percentage value for percent_thresholding.
     '''
-    
+
+    weighted_alpha = False
+    if isinstance(alpha, np.ndarray):
+        if alpha.shape==data.shape:
+            alpha_img = recover_3D(brain_mask_file, alpha)
+            weighted_alpha = True
+        else:
+            raise ValueError("alpha array must match the shape of the data array shape.")
+    elif not isinstance(alpha, float) and not isinstance(alpha, int):
+        raise ValueError("alpha must be a float of numpy array matching the data array shape.")
     sitk_img = recover_3D(brain_mask_file, data)
 
     if selected_slices=='all':
@@ -132,10 +143,25 @@ def plot_brain(data,brain_mask_file,template_file=None,
         pos = ax.imshow(slices_background, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=0,vmax=1,cmap='gray', alpha=1, interpolation='none')
         ax.axis('off')
 
+    if weighted_alpha:
+        alpha,bbox_physical_dimensions = gen_slices_array(alpha_img,selected_slices,slices_per_row,threshold=None, plane=plane)
+            
     pos = ax.imshow(slices, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=vmin, vmax=vmax,cmap=cmap, alpha=alpha, interpolation='none')
     ax.axis('off')
+
     if plot_cbar:
-        cbar = fig.colorbar(pos, ax=ax)
+        if weighted_alpha:
+            # Create a separate mappable for the colorbar,
+            # since the image itself has an array-valued alpha.
+            from matplotlib.cm import ScalarMappable
+            from matplotlib.colors import Normalize
+
+            norm = Normalize(vmin=vmin, vmax=vmax)
+            sm = ScalarMappable(norm=norm, cmap=cmap)
+
+            cbar = fig.colorbar(sm, ax=ax)
+        else:
+            cbar = fig.colorbar(pos, ax=ax)
     else:
         cbar = None
 
