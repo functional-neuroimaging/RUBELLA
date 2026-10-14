@@ -148,11 +148,9 @@ class DataObject:
         censoring_file_list : list
             A list of file paths, each corresponding to a .csv censoring mask file outputed from RABIES. 
         
-        Attributes
-        ----------
-        censoring_mask : dictionary
-            A dictionary of the censoring mask arrays for each img_id.
-            
+        The censoring masks are stored in the ``censoring_mask`` attribute
+        (see the DataObject class attributes).
+
         Returns
         -------
         self : object

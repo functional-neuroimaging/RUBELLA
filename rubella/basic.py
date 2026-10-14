@@ -159,6 +159,7 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         level: 'DR_maps', 'DR_amp', and 'DR_cross_corr'. Each of those key is a 
         dictionary with keys corresponding to img_id_list, i.e. one entry
         per img_id.
+
         'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
             The set of dual regression maps.
         'DR_time' : for each img_id, contains a 2D np.ndarray of shape n_timepointsxn_ICs
@@ -282,6 +283,7 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
     -------
     FCM_dict : dictionary
         Nested dictionary with img_id_list as keys. Each entry contains:
+
         'parcel_ids' : list
             The ordered list of parcel labels corresponding to the rows/columns of the matrix.
         'matrix' : np.ndarray of shape n_parcels x n_parcels
@@ -369,36 +371,36 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         and should not be included here.
 
     Examples
-        --------
-        Return raw timeseries windows (default behaviour):
+    --------
+    Return raw timeseries windows (default behaviour):
 
-        >>> sliding_window_dict = get_sliding_windows(
-        ...     timeseries_dict=data_obj.timeseries_dict,
-        ...     img_id_list=data_obj.img_id_list,
-        ...     censoring_mask_dict=data_obj.censoring_mask,
-        ...     window_length=360,   # 6 min at TR=1s
-        ...     step_size=180,       # 3 min step
-        ...     min_censored_window_length=1,
-        ... )
+    >>> sliding_window_dict = get_sliding_windows(
+    ...     timeseries_dict=data_obj.timeseries_dict,
+    ...     img_id_list=data_obj.img_id_list,
+    ...     censoring_mask_dict=data_obj.censoring_mask,
+    ...     window_length=360,   # 6 min at TR=1s
+    ...     step_size=180,       # 3 min step
+    ...     min_censored_window_length=1,
+    ... )
 
-        Compute seed-based connectivity within each window by passing ``fc_func``.
-        Note that ``timeseries_dict`` and ``img_id_list`` are injected automatically
-        and must not be included in ``fc_kwargs``:
+    Compute seed-based connectivity within each window by passing ``fc_func``.
+    Note that ``timeseries_dict`` and ``img_id_list`` are injected automatically
+    and must not be included in ``fc_kwargs``:
 
-        >>> sliding_window_dict = get_sliding_windows(
-        ...     timeseries_dict=data_obj.timeseries_dict,
-        ...     img_id_list=data_obj.img_id_list,
-        ...     censoring_mask_dict=data_obj.censoring_mask,
-        ...     window_length=360,
-        ...     step_size=180,
-        ...     min_censored_window_length=1,
-        ...     fc_func=rubella.basic.seed_based_FC,
-        ...     fc_kwargs={
-        ...         'brain_mask_file': data_obj.brain_mask_file,
-        ...         'seed_roi': my_seed_roi,
-        ...         'z_corr': True,
-        ...     },
-        ... )
+    >>> sliding_window_dict = get_sliding_windows(
+    ...     timeseries_dict=data_obj.timeseries_dict,
+    ...     img_id_list=data_obj.img_id_list,
+    ...     censoring_mask_dict=data_obj.censoring_mask,
+    ...     window_length=360,
+    ...     step_size=180,
+    ...     min_censored_window_length=1,
+    ...     fc_func=rubella.basic.seed_based_FC,
+    ...     fc_kwargs={
+    ...         'brain_mask_file': data_obj.brain_mask_file,
+    ...         'seed_roi': my_seed_roi,
+    ...         'z_corr': True,
+    ...     },
+    ... )
 
     Returns
     -------

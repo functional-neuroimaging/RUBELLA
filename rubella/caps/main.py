@@ -78,7 +78,7 @@ class CAPs:
     is achieved by z-scoring (correlation) or L2-normalizing (cosine) each sample before running
     k-means with Euclidean distance -- mathematically equivalent to correlation/cosine-based
     clustering, but able to use fast, compiled Euclidean distance routines. As a consequence,
-    cluster_centers_ is returned in that same normalized space (zero-mean/unit-variance per row
+    ``cluster_centers_`` is returned in that same normalized space (zero-mean/unit-variance per row
     for 'correlation', unit-norm per row for 'cosine'), not in the original data's raw units.
     For 'euclidean' distance, no normalization is applied and centroids remain in the original
     data scale.
@@ -168,7 +168,7 @@ class CAPs:
         Returns
         -------
         self : CAPs
-            The fitted CAPs object, with cluster_centers_, labels_, inertia_ (and, if n_rep>1,
+            The fitted CAPs object, with ``cluster_centers_``, ``labels_``, ``inertia_`` (and, if n_rep>1,
             cross_rep_sim) set.
 
         Notes
@@ -287,9 +287,9 @@ class CAPs:
             The data to reconstruct.
 
         prenormalize_X : bool, default=True
-            If True, X is normalized the same way as cluster_centers_ (z-scored per sample for
+            If True, X is normalized the same way as ``cluster_centers_`` (z-scored per sample for
             'correlation', L2-normalized per sample for 'cosine', unchanged for 'euclidean')
-            before reconstruction, so that X and cluster_centers_ are in a comparable scale.
+            before reconstruction, so that X and ``cluster_centers_`` are in a comparable scale.
             Leave this as True unless X has already been normalized this way beforehand. 
             This is especially critical for 'correlation' distance: leaving this False will 
             produce a misleading reconstruction, since a zero-mean centroid cannot explain a 
@@ -298,13 +298,13 @@ class CAPs:
         Returns
         -------
         recon : np.ndarray of shape (n_samples, n_features)
-            The reconstructed data, i.e. coeffs[:, None] * cluster_centers_[labels].
+            The reconstructed data, i.e. coeffs[:, None] * ``cluster_centers_[labels]``.
 
         coeffs : np.ndarray of shape (n_samples,)
             The per-sample scalar coefficient fit for each sample's assigned centroid.
 
         labels : np.ndarray of shape (n_samples,)
-            The cluster assignment used for reconstruction (self.labels_ if it matches X in
+            The cluster assignment used for reconstruction (``self.labels_`` if it matches X in
             length, otherwise freshly computed via predict(X)).
 
         X : np.ndarray of shape (n_samples, n_features)
@@ -354,7 +354,7 @@ class CAPs:
             The data to evaluate.
 
         prenormalize_X : bool, default=True
-            Whether to normalize X to match cluster_centers_ before reconstruction -- see
+            Whether to normalize X to match ``cluster_centers_`` before reconstruction -- see
             reconstruct_timeseries(). Should be left as True for 'correlation'/'cosine'
             distance; leaving X un-normalized will produce a misleadingly low R2.
 
