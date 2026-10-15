@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"  # sphinx 9.1 requires >=3.12; rubella's own deps are mocked, so this is independent of its runtime
           cache: pip
           cache-dependency-path: docs/requirements.txt
 
