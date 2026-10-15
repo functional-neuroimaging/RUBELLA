@@ -10,7 +10,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 project = 'RUBELLA'
 author = 'Gozzi lab'
-release = '0.0.1'  # fallback if the package is not installed in the docs env
+# read the version from rubella/__version__.py, as setup.py does, without importing the package
+about = {}
+with open(os.path.join(os.path.abspath('..'), 'rubella', '__version__.py')) as f:
+    exec(f.read(), about)
+release = about['__version__']
 
 # -- General configuration ---------------------------------------------------
 extensions = [
