@@ -1,5 +1,10 @@
 # RUBELLA: Repository of Utilitaries for Brain Experiments Low Level Analyses.
 
+## Documentation
+
+To consult the latest version of the package's documentation: [download the latest docs (.zip)](https://github.com/functional-neuroimaging/RUBELLA/releases/download/docs-latest/rubella-docs.zip), then unzip and open `rubella-docs/index.html`.
+This HTML documentation is built automatically from the `main` branch. For documentation associated to an older version, you can find it attached to its release on the [Releases page](https://github.com/functional-neuroimaging/RUBELLA/releases).
+
 ## Files
 
 * `rubella/`          ...the software package
