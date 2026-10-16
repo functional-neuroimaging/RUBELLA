@@ -50,6 +50,7 @@ depth: 1
    :nosignatures:
 
    load_img_to_array
+   get_img_from_array
    get_concat_timeseries
 
 .. automodule:: rubella.utils

@@ -84,6 +84,92 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_t
     return img_array
 
 
+def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
+    """Recover an image from an array of brain voxels, i.e. the inverse of :func:`load_img_to_array`.
+
+    A 1D input array is converted into a 3D volume, and a 2D input array (time by voxel) is
+    converted into a 4D image. Each voxel value is placed back at its location within the brain
+    mask, and voxels outside the brain mask are set to 0. The output image takes the voxel
+    spacing, origin and orientation of the brain mask (for a 4D image, the spacing along time is 1).
+
+    This function can be used to save outputs to a .nii.gz Nifti file, for instance a brain map
+    derived from :func:`rubella.basic_fc.seed_based_FC` (see the Examples below).
+
+    Parameters
+    ----------
+    img_array : numpy.ndarray
+        The input array, either 1D of shape (n_voxels,) for a 3D volume, or 2D of shape
+        (n_timepoints, n_voxels) for a 4D image. The voxel indices must match the brain voxels
+        of ``brain_mask_file``, as for arrays loaded with :func:`load_img_to_array`.
+
+    brain_mask_file : str or pathlib.Path
+        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+
+    image_type : str, default='SITK'
+        The format of the output image, either ``'SITK'`` for a SimpleITK image, or
+        ``'nibabel'`` for a nibabel image.
+
+    Returns
+    -------
+    img : SimpleITK.Image or nibabel.Nifti1Image
+        The output image, in the format determined by ``image_type``.
+
+    Examples
+    --------
+    Save a brain map to a Nifti file as a SimpleITK image:
+
+    >>> import SimpleITK as sitk
+    >>> img = get_img_from_array(SBC_map, data_obj.brain_mask_file, image_type='SITK')
+    >>> sitk.WriteImage(img, 'SBC_map.nii.gz')
+
+    Or as a nibabel image:
+
+    >>> import nibabel as nib
+    >>> img = get_img_from_array(SBC_map, data_obj.brain_mask_file, image_type='nibabel')
+    >>> nib.save(img, 'SBC_map.nii.gz')
+    """
+    if image_type not in ['SITK', 'nibabel']:
+        raise ValueError(f"image_type must be 'SITK' or 'nibabel', got {image_type} instead.")
+
+    img_array = np.asarray(img_array)
+    if img_array.dtype == bool:
+        img_array = img_array.astype(np.uint8)  # boolean arrays are not supported by image formats
+
+    mask_img = sitk.ReadImage(Path(brain_mask_file))
+    volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
+    num_voxels = volume_idx.sum()
+
+    if not img_array.ndim in [1, 2]:
+        raise ValueError(f"img_array must be 1D or 2D, got an array of {img_array.ndim} dimensions instead.")
+    if not img_array.shape[-1] == num_voxels:
+        raise ValueError(f"img_array has {img_array.shape[-1]} voxels, but the brain mask has {num_voxels} voxels.")
+
+    # fill the brain voxels of an empty volume (or timeseries of volumes) with the input values
+    if img_array.ndim == 1:
+        full_array = np.zeros(volume_idx.shape, dtype=img_array.dtype)
+        full_array[volume_idx] = img_array
+    else:
+        full_array = np.zeros((img_array.shape[0],) + volume_idx.shape, dtype=img_array.dtype)
+        full_array[:, volume_idx] = img_array
+
+    if image_type == 'nibabel':
+        import nibabel as nib
+        # nibabel orders array axes as (x, y, z, time), the reverse of SimpleITK arrays
+        return nib.Nifti1Image(full_array.T, nib.load(Path(brain_mask_file)).affine)
+
+    img = sitk.GetImageFromArray(full_array, isVector=False)
+    if img_array.ndim == 1:
+        img.CopyInformation(mask_img)
+    else:
+        # extend the 3D spatial information of the brain mask with a 4th time dimension
+        img.SetSpacing(mask_img.GetSpacing() + (1.0,))
+        img.SetOrigin(mask_img.GetOrigin() + (0.0,))
+        direction = np.eye(4)
+        direction[:3, :3] = np.array(mask_img.GetDirection()).reshape(3, 3)
+        img.SetDirection(direction.flatten())
+    return img
+
+
 def get_concat_timeseries(timeseries_dict, img_id_list):
     concat_timeseries = timeseries_dict[img_id_list[0]]
     for img_id in img_id_list[1:]:
