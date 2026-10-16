@@ -7,12 +7,13 @@ import numpy as np
 from pathlib import Path
 
 
-def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
+def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_to_brain_mask=True):
     """Load a Nifti image as an array, including only the voxels within the brain mask.
 
     The input brain mask determines the expected image array spatial dimensions and resolution.
     If the input ``img_file`` does not match the resolution of the brain mask, the image
-    is resampled to match the brain mask volume before being loaded as an array.
+    is resampled to match the brain mask volume before being loaded as an array (with 
+    ``resample_to_brain_mask=True`` by default).
     IMPORTANTLY: this assumes that despite a mismatch in resolution, the two images occupy the
     same space - if not, the loaded array is likely to be empty after resampling to the brain mask.
 
@@ -28,6 +29,11 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
         Whether the input ``img_file`` is itself a brain mask or parcellation, in which case the
         resampling is carried using the antsApplyTransforms GenericLabel interpolator.
 
+    resample_to_brain_mask : bool, default=True
+        If True, and the input image array size does not match the array size of the ``brain_mask_file``,
+        the input image is resampled onto the image grid of the brain mask so the data can be loaded
+        in a commonspace. If False, any mismatch throws an error.
+        
     Returns
     -------
     img_array : numpy.ndarray
@@ -36,31 +42,41 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
     img_file = Path(img_file)
     brain_mask_file = Path(brain_mask_file)
     sitk_img = sitk.ReadImage(img_file)
-    dim = sitk_img.GetDimension()
 
     mask_img = sitk.ReadImage(brain_mask_file)
     volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
 
-    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
-        print("""
-                Warning: The input image array does not match the brain mask.
-                The image is resampled with the assumption that it occupies 
-                the same space as the brain mask.
-                """)
-        if input_is_mask:
-            from rabies.utils import antsApplyTransforms
-            import tempfile, shutil
-            tmppath = tempfile.mkdtemp()
-            out_file = f"{tmppath}/resampled_mask.nii.gz"
-            antsApplyTransforms(transforms = [], inverses = [], 
-                input_image = str(img_file), ref_image = str(brain_mask_file), output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
-            sitk_img = sitk.ReadImage(out_file, sitk.sitkInt16)
-            shutil.rmtree(tmppath)
-        else:
-            from rabies.utils import resample_volumes
-            sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
-                                                    motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+    input_size=sitk_img.GetSize()
+    mask_size=mask_img.GetSize()
+    if not input_size[:3]==mask_size:
+        warning_str=f"""
+        Warning: The input image array of size {input_size} does not match the 
+        brain mask array of size {mask_size}.
+        """
 
+        if resample_to_brain_mask:
+            warning_str+="""
+        The image is resampled with the assumption that it occupies 
+        the same space as the brain mask.
+        """
+            print(warning_str)
+            if input_is_mask:
+                from rabies.utils import antsApplyTransforms
+                import tempfile, shutil
+                tmppath = tempfile.mkdtemp()
+                out_file = f"{tmppath}/resampled_mask.nii.gz"
+                antsApplyTransforms(transforms = [], inverses = [], 
+                    input_image = str(img_file), ref_image = str(brain_mask_file), output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
+                sitk_img = sitk.ReadImage(out_file, sitk.sitkInt16)
+                shutil.rmtree(tmppath)
+            else:
+                from rabies.utils import resample_volumes
+                sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                                                        motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
+        else:
+            raise ValueError(warning_str)
+
+    dim = sitk_img.GetDimension()
     if dim==4:
         img_array = sitk.GetArrayFromImage(sitk_img)[:,volume_idx]
     elif dim==3:

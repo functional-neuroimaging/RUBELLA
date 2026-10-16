@@ -137,7 +137,6 @@ class DataObject:
             new_list = False
             if not len(img_id_list)==num_imgs:
                 raise ValueError("The input img_id_list does not have the same length as timeseries_file_list.")
-        volume_idx = self.volume_idx
 
         for i in range(num_imgs):
             file = Path(timeseries_file_list[i])
@@ -152,8 +151,9 @@ class DataObject:
                 raise ValueError(f'Duplicate found for {img_id}')
             if verbose:
                 print(file)
-            timeseries = sitk.GetArrayFromImage(sitk.ReadImage(file))[:,volume_idx]
-            timeseries_dict[img_id] = timeseries
+
+            timeseries_dict[img_id] = self._load_img_to_array(
+                file, input_is_mask=False, resample_to_brain_mask=False)
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
@@ -240,7 +240,7 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def _load_img_to_array(self, img_file, input_is_mask=False):
+    def _load_img_to_array(self, img_file, input_is_mask=False, resample_to_brain_mask=True):
         """Load an input Nifti image to the 2D array format of the DataObject.
 
         Wrapper for :func:`rubella.utils.load_img_to_array`, using the DataObject's
@@ -255,9 +255,15 @@ class DataObject:
             Whether the input ``img_file`` is itself a brain mask or parcellation, in which case
             the resampling is carried using the antsApplyTransforms GenericLabel interpolator.
 
+        resample_to_brain_mask : bool, default=True
+            If True, and the input image array size does not match the array size of the ``brain_mask_file``,
+            the input image is resampled onto the image grid of the brain mask so the data can be loaded
+            in a commonspace. If False, any mismatch throws an error.
+            
         Returns
         -------
         img_array : numpy.ndarray
             The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
         """
-        return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask)
+        return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask, 
+                                 resample_to_brain_mask=resample_to_brain_mask)
