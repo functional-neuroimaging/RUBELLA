@@ -5,55 +5,81 @@ import pandas as pd
 from .basic import load_img_to_array
 
 class DataObject:
-    """RUBELLA's DataObject.
+    """Group-level container of timeseries images in a common 2D time-by-voxel format.
 
-    The object loads data from a set of timeseries images into a common 2D timeXspace array format,
-    enabling common space-time matrix computations across the entire loaded dataset.
+    The object loads a list of timeseries images into a common 2D time-by-voxel array format,
+    which streamlines downstream analyses at the group level. The timeseries must already be
+    in a commonspace overlapping with the input ``brain_mask_file``. The brain mask defines which
+    voxels are loaded into the 2D time-by-voxel array.
+
+    When reading each input timeseries file, it is assigned a unique image ID (either based on
+    the filename or a custom input, see the ``img_id_list`` and ``fname_split`` parameters) which
+    allows to retain the identity of each input within the :class:`DataObject`. The ID is used to
+    store timeseries in dictionary format, the :attr:`timeseries_dict` attribute, and to retrieve
+    a given image array. The full list of IDs is stored in the :attr:`img_id_list` attribute.
+
+    When creating the object, a ``brain_mask_file`` must be provided at minimum. If
+    ``timeseries_file_list`` is provided, timeseries are also loaded with
+    :meth:`load_commonspace_data_dict`. Similarly, censoring masks are loaded with
+    :meth:`load_censoring_mask` if ``censoring_file_list`` is provided.
 
     Parameters
     ----------
-    brain_mask_file : str, pathlib.Path
+    brain_mask_file : str or pathlib.Path
         Full path to the brain mask Nifti file that will be used to load commonspace timeseries.
 
-    timeseries_file_list : list
-        This must be a list of file paths, each corresponding to a Nifti 4D timeseries image. 
-        All images must be in the same commonspace as brain_mask_file.
+    timeseries_file_list : list of str or pathlib.Path, default=None
+        A list of file paths, each corresponding to a Nifti 4D timeseries image.
+        All images must be in the same commonspace as ``brain_mask_file``.
 
-    img_id_list : list, default=None
+    img_id_list : list of str, default=None
         Optionally, a list of manually-defined IDs can be provided. Each entry in the list will be
-        matched with the corresponding index in timeseries_file_list.
-        If None is provided, the image ID will be the original Nifti file name.
+        matched with the corresponding index in ``timeseries_file_list``.
+        If None, the image ID is derived from the Nifti file name, as determined by the
+        ``fname_split`` parameter.
 
     fname_split : str, default=None
-        If img_id_list=None, meaning that img_id is a filename, the img_id will be cropped by taking 
-        the prefix before fname_split. This is useful to remove the filename ending from img_id,
-        which may prevent correctly associating the img_id to other file types, like a censoring mask
-        file as described with load_censoring_mask() below.
+        If ``img_id_list=None``, meaning that the image ID is a filename, the ID is cropped by
+        taking the prefix before ``fname_split``. This is useful to remove the filename ending
+        from the ID, which may otherwise prevent associating the ID to other file types, like a
+        censoring mask file as described in :meth:`load_censoring_mask`.
 
-    censoring_file_list : list, default=None
-        A list of file paths, each corresponding to a .csv censoring mask file outputed from RABIES. 
-        
+    censoring_file_list : list of str or pathlib.Path, default=None
+        A list of file paths, each corresponding to a .csv censoring mask file output from RABIES.
+        Each file in the list is paired with a pre-existing image ID in :attr:`img_id_list`,
+        by searching which ID is contained within the file name (e.g.
+        ``'sub-001_ses-2_censoring_mask.csv'`` will be paired to the ID ``'sub-001_ses-2'``).
+        Hence, it is important to set :attr:`img_id_list` when loading timeseries so that it can
+        match those files.
+
     verbose : bool, default=True
         Print filenames during loading.
 
     Attributes
     ----------
-    img_id_list : list
-        The list of keys in the data dictionaries that correspond to each image ID.
+    brain_mask_file : pathlib.Path
+        A copy of the input ``brain_mask_file``.
 
-    timeseries_dict : dictionary
-        This dictionary contains the loaded 2D timeseries for each image, where keys correspond
-        to the image IDs.
+    volume_idx : numpy.ndarray
+        The brain mask loaded as a boolean numpy array. These are the indices used to load
+        input 3D volumes into a 1D concatenated space format.
 
-    num_timeframes : dictionary
-        Number of timeframes for each image.
-        
-    censoring_mask : dictionary
-        A dictionary of the censoring mask arrays for each img_id.
+    img_id_list : list of str
+        The image IDs loaded in the DataObject. These are also the keys to access values inside
+        the dictionaries from the other attributes below.
 
+    timeseries_dict : dict
+        The loaded 2D timeseries (time by voxel) for each image, with keys corresponding to the
+        image IDs.
+
+    censoring_mask : dict
+        The censoring mask arrays, with keys corresponding to the image IDs.
+
+    grouping : dict
+        The group ID attributed to each image ID, with keys corresponding to the image IDs.
     """
 
-    def __init__(self, timeseries_file_list, brain_mask_file, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
+    def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
         # the brain mask file defines the voxel commonspace to load each volume
         brain_mask_file = Path(brain_mask_file)
         self.brain_mask_file = brain_mask_file
@@ -61,49 +87,48 @@ class DataObject:
         volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
         self.volume_idx = volume_idx
 
-        # at minimum the data object loads a set of commonspace timeseries
-        self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
+        if timeseries_file_list:
+            self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
 
         if censoring_file_list:
             self.load_censoring_mask(censoring_file_list)
 
     def load_commonspace_data_dict(self, timeseries_file_list, img_id_list=None, fname_split=None, verbose=True):
-        """Loads timeseries_file_list into a dictionary of 2D arrays.
+        """Load a list of timeseries images into a dictionary of 2D arrays.
+
+        The loaded timeseries are stored in the :attr:`timeseries_dict` attribute, and their
+        corresponding image IDs in the :attr:`img_id_list` attribute. Any previously loaded
+        timeseries are replaced.
 
         Parameters
         ----------
-        timeseries_file_list : list
-            This must be a list of file paths, each corresponding to a Nifti 4D timeseries image. 
-            All images must be in the same commonspace as brain_mask_file.
+        timeseries_file_list : list of str or pathlib.Path
+            A list of file paths, each corresponding to a Nifti 4D timeseries image.
+            All images must be in the same commonspace as ``brain_mask_file``.
 
-        img_id_list : list, default=None
+        img_id_list : list of str, default=None
             Optionally, a list of manually-defined IDs can be provided. Each entry in the list will be
-            matched with the corresponding index in timeseries_file_list.
-            If None is provided, the image ID will be the original Nifti file name.
+            matched with the corresponding index in ``timeseries_file_list``.
+            If None, the image ID is derived from the Nifti file name, as determined by the
+            ``fname_split`` parameter.
 
         fname_split : str, default=None
-            If img_id_list=None, meaning that img_id is a filename, the img_id will be cropped by taking 
-            the prefix before fname_split. This is useful to remove the filename ending from img_id,
-            which may prevent correctly associating the img_id to other file types, like a censoring mask
-            file as described with load_censoring_mask() below.
+            If ``img_id_list=None``, meaning that the image ID is a filename, the ID is cropped by
+            taking the prefix before ``fname_split``. This is useful to remove the filename ending
+            from the ID, which may otherwise prevent associating the ID to other file types, like a
+            censoring mask file as described in :meth:`load_censoring_mask`.
 
         verbose : bool, default=True
             Print filenames during loading.
 
         Returns
         -------
-        img_id_list : list
-            The list of keys in the data dictionaries that correspond to each image ID.
-        timeseries_dict : dictionary
-            This dictionary contains the loaded 2D timeseries for each image, where keys correspond
-            to the image IDs.
-        num_timeframes : dictionary
-            Number of timeframes for each image.
+        self : object
+            The DataObject.
         """
 
         # all inputs are assumed to overlap in a commonspace
         timeseries_dict = {}
-        num_timeframes_dict = {}
         num_imgs = len(timeseries_file_list)
         if not img_id_list:
             img_id_list = []
@@ -129,30 +154,29 @@ class DataObject:
                 print(file)
             timeseries = sitk.GetArrayFromImage(sitk.ReadImage(file))[:,volume_idx]
             timeseries_dict[img_id] = timeseries
-            num_timeframes_dict[img_id] = timeseries.shape[0]
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
-        self.num_timeframes = num_timeframes_dict
         return self
 
     def load_censoring_mask(self, censoring_file_list):
-        """
-        Assign a censoring mask array to each img_id, to correctly identify censored frames in 
-        downstream analyses.
-        Each file in censoring_file_list is paired by searching which img_id is contained within its
-        file name (e.g. 'sub-001_ses-2' will be paired to img_id 'sub-001_ses-2').
+        """Assign a censoring mask array to each image ID.
+
+        The censoring masks allow downstream functions to identify which frames were masked
+        from the original timeseries (i.e. where there are 'holes' in the time domain).
+        Each file in the list is paired with a pre-existing image ID in :attr:`img_id_list`,
+        by searching which ID is contained within the file name (e.g.
+        ``'sub-001_ses-2_censoring_mask.csv'`` will be paired to the ID ``'sub-001_ses-2'``).
+        Hence, it is important to set :attr:`img_id_list` when loading timeseries so that it can
+        match those files.
+
+        The censoring masks are stored in the :attr:`censoring_mask` attribute.
 
         Parameters
         ----------
-        censoring_file_list : list
-            A list of file paths, each corresponding to a .csv censoring mask file outputed from RABIES. 
-        
-        Attributes
-        ----------
-        censoring_mask : dictionary
-            A dictionary of the censoring mask arrays for each img_id.
-            
+        censoring_file_list : list of str or pathlib.Path
+            A list of file paths, each corresponding to a .csv censoring mask file output from RABIES.
+
         Returns
         -------
         self : object
@@ -172,7 +196,7 @@ class DataObject:
                 censoring_file = Path(censoring_file)
                 if img_id in censoring_file.name:
                     if img_id in self.censoring_mask.keys():
-                        raise ValueError(f"{img_id} is assigned to multiple censoring mask files - review the inputs and img_id_split.")
+                        raise ValueError(f"{img_id} is assigned to multiple censoring mask files - review the inputs and fname_split.")
                     self.censoring_mask[img_id]=pd.read_csv(censoring_file)['False = Masked Frames'].values
 
             if not img_id in self.censoring_mask.keys():
@@ -180,20 +204,20 @@ class DataObject:
         return self
 
     def assign_group(self, group_str_list):
-        """
-        Assign a group ID to each img_id. The group ID must be contained within img_id
-        for automated assignment.
+        """Assign a group ID to each image ID.
+
+        You must provide a list of strings, each defining a distinct group ID for your dataset.
+        The function assumes that a single group ID is found inside the image ID string, in order
+        to carry the assignment (hence you must make sure :attr:`img_id_list` is set so that the
+        group IDs can be retrieved from the ID name).
+
+        The group assignments are stored in the :attr:`grouping` attribute.
 
         Parameters
         ----------
-        group_str_list : list
-            A list of str, where each entry is a possible group ID.
-        
-        Attributes
-        ----------
-        grouping : dictionary
-            A dictionary of the group ID for each img_id.
-            
+        group_str_list : list of str
+            A list of strings, where each entry is a possible group ID.
+
         Returns
         -------
         self : object
@@ -217,24 +241,23 @@ class DataObject:
         return self
 
     def _load_img_to_array(self, img_file, input_is_mask=False):
-        """
-        Wrapper for rubella.data_obj.load_img_to_array function.
-        This support function will load an input Nifti image to 
-        the 2D array format of the DataObject.
-        See help(rubella.data_obj.load_img_to_array) for more details.
+        """Load an input Nifti image to the 2D array format of the DataObject.
+
+        Wrapper for :func:`rubella.basic.load_img_to_array`, using the DataObject's
+        ``brain_mask_file``. See that function for more details.
 
         Parameters
         ----------
-        img_file : str, pathlib.Path
+        img_file : str or pathlib.Path
             Path to the input Nifti file.
 
         input_is_mask : bool, default=False
-            Whether the input img_file is itself a brain mask or parcellation, in which case
-            the resampling is carried using antsApplyTransforms GenericLabel interpolator
+            Whether the input ``img_file`` is itself a brain mask or parcellation, in which case
+            the resampling is carried using the antsApplyTransforms GenericLabel interpolator.
 
         Returns
         -------
-        img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
-            The output image array.
+        img_array : numpy.ndarray
+            The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
         """
         return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask)

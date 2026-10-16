@@ -1,27 +1,32 @@
 # RUBELLA: Repository of Utilitaries for Brain Experiments Low Level Analyses.
 
-## Files
+## Documentation
 
-* `rubella/`          ...the software package
-* `docs/`             ...detailed documentation of RUBELLA's usage
-* `contributing.md`   ...instructions for committing new code
-* `environment.yml`   ...a python environment file with all required dependencies
-* `setup.py`          ...install the python package so it can be imported
+To consult the latest version of the package's documentation: [download the latest docs (.zip)](https://github.com/functional-neuroimaging/RUBELLA/releases/download/docs-latest/rubella-docs.zip), then unzip and open `rubella-docs/index.html`.
+This HTML documentation is built automatically from the `main` branch. For documentation associated to an older version, you can find it attached to its release on the [Releases page](https://github.com/functional-neuroimaging/RUBELLA/releases).
 
-## Python setup
+## Recommended installation
 
+Below is a template to create a conda environment with RUBELLA installed
 ```sh
-# install miniconda/anaconda which handles python environment
-# then you can install mamba, which is faster than conda for creating an environment, conda install can be very slow
-conda install -n base -c conda-forge mamba
-mamba env create -f rubella_env.yml # the .yml file will create a 'rubella' environment will all required dependencies
-conda activate rubella # activate your python environment
-pip install -e . # this will install the rubella package, which can then be imported in python
-# you're set, now you can run python with the package installed
+conda install -n base -c conda-forge mamba # this installs the mamba package manager, which installs packages 
+# much faster than using the native conda install
+
+mamba env create -f rubella_env.yml -n rubella_env # the .yml file contains a list of python dependencies you
+# need to run RUBELLA. They are listed with specific versions that we know work, so this is a more robust method
+# to setup you conda environment
+# `-n rubella_env` is the name of your environment, you can give it another name if you wish
+
+conda activate rubella # activate your python environment, so that you will install rubella inside with the 
+# next command
+
+pip install -e . # this will install the rubella package, and it is ready for import when you code in python 
+# using the newly created environment
 ```
 
-## Quick start
-RUBELLA begins by loading a list of timeseries Niftis into a DataObject.
+## Quick introduction: data loading, computing functional connectivity, and visualizing outputs
+
+RUBELLA begins by loading a list of timeseries Niftis files (that are preprocessed and overlap in a commonspace) using the DataObject class, which stores all the timeseries in a common array format, ready for computations.
 ```py
 
 # provide a path to the commonspace brain mask
@@ -37,13 +42,19 @@ censoring_file_list = glob.glob('path_to_censoring_csv_folder/*_frame_censoring_
 from rubella.data_obj import DataObject
 data_obj = DataObject(timeseries_file_list, brain_mask_file, img_id_list=None, fname_split='_cleaned', censoring_file_list=censoring_file_list, verbose=True)
 ```
+You should become familiar with RUBELLA's DataObject, as it is at the core of how the package handles computations at the dataset level, and the object stores the key input for downstream functions. You should its docstring by typing `help(DataObject)` in python or by consulting the reference API in the documentation.
 
-Then downstream analyses across all images are conveniently computed... for example for global connectivity:
+Next, downstream analyses across all images can be conveniently computed using various implementations of
+functional connectivity analyses in the package... for example for global connectivity:
 ```py
 from rubella.basic import compute_global_connectivity
 GC_dict = compute_global_connectivity(data_obj.timeseries_dict, data_obj.img_id_list, verbose=True)
-# GC_dict is a dictionary of global connectivity maps for each image loaded in the DataObject
-# each entry in the dictionary is accessed from the list of image IDs, img_id_list
+```
+Most functional connectivity functions in RUBELLA stores the output in a python dictionary format, where
+the connectivity measure for a given scan is accessed using its image ID within the DataObject. For instance,
+`GC_dict` is a python dictionary that stores the computed global connectivity maps for each image, and you
+can loop through all images and access its global connectivity with:
+```
 for img_id in data_obj.img_id_list:
     global_connectivity = GC_dict[img_id]
 ```

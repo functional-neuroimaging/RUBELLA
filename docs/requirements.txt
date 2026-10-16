@@ -1,0 +1,5 @@
+# pinned to the versions tested with `sphinx-build -W`; upgrade deliberately,
+# since a new release can introduce warnings that fail the docs workflow
+sphinx==9.1.0
+sphinx-rtd-theme==3.1.0
+myst-parser==5.1.0
