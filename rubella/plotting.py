@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import nilearn.plotting # this is imported so that 'cold_hot' colormap is available
 from rabies.visualization import otsu_scaling
-from rabies.analysis_pkg.diagnosis_pkg.analysis_QC import threshold_top_percent
+from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
 from rabies.utils import recover_3D
 import SimpleITK as sitk
 import numpy as np
