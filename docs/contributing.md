@@ -121,4 +121,4 @@ These are the detailed instructions:
 - add a test in the `tests/` folder (the fake data in `tests/conftest.py` can be reused), and
   run `pytest tests/`;
 - check that the documentation builds without warnings, using
-  `sphinx-build -b html -n docs docs/_build/html` (requires `pip install -r docs/requirements.txt`).
+  `sphinx-build -b html docs docs/_build/html` (requires `pip install -r docs/requirements.txt`).

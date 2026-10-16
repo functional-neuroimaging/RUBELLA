@@ -6,31 +6,30 @@ from pathlib import Path
 
 
 def load_img_to_array(img_file, brain_mask_file, input_is_mask=False):
-    """Support function for loading an input Nifti image into an array format including 
-    only the voxels within the input brain mask. 
+    """Load a Nifti image as an array, including only the voxels within the brain mask.
 
-    The input brain mask determines the expected image array spatial dimensions and resolution. 
-    If the input img_file does not match the resolution of the brain mask, the image 
+    The input brain mask determines the expected image array spatial dimensions and resolution.
+    If the input ``img_file`` does not match the resolution of the brain mask, the image
     is resampled to match the brain mask volume before being loaded as an array.
     IMPORTANTLY: this assumes that despite a mismatch in resolution, the two images occupy the
     same space - if not, the loaded array is likely to be empty after resampling to the brain mask.
 
     Parameters
     ----------
-    img_file : str, pathlib.Path
+    img_file : str or pathlib.Path
         Path to the input Nifti file.
 
-    brain_mask_file : str, pathlib.Path
+    brain_mask_file : str or pathlib.Path
         Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
 
     input_is_mask : bool, default=False
-        Whether the input img_file is itself a brain mask or parcellation, in which case the 
-        resampling is carried using antsApplyTransforms GenericLabel interpolator.
+        Whether the input ``img_file`` is itself a brain mask or parcellation, in which case the
+        resampling is carried using the antsApplyTransforms GenericLabel interpolator.
 
     Returns
     -------
-    img_array : numpy array, 2D (i.e. time by voxel) if the input is a 4D image and 1D for a 3D image.
-        The output image array.
+    img_array : numpy.ndarray
+        The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
     """
     img_file = Path(img_file)
     brain_mask_file = Path(brain_mask_file)
@@ -77,32 +76,34 @@ def vcorrcoef(X, Y):  # return a correlation between each row of X with each row
 
 
 def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_corr=False):
-    """
-    Compute seed based connectivity for one input seed, for all img_id within a timeseries_dict.
+    """Compute seed-based connectivity for one input seed, for each image ID within a timeseries_dict.
 
     Parameters
     ----------
-    timeseries_dict : dict, DataObject.timeseries_dict
-        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
-        The full path to the brain mask Nifti file.
+    brain_mask_file : str or pathlib.Path
+        The full path to the brain mask Nifti file,
+        e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
-    img_id_list : list, DataObject.img_id_list
-        List of image IDs that are keys for timeseries_dict
+    img_id_list : list of str
+        List of image IDs that are keys for ``timeseries_dict``,
+        e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    seed_roi : str, np.ndarray
-        The input seed region of interest. Must be a brain mask delineating the voxels part of 
-        the seed region. Can be either the full path to a Nifti file, 
-        or a pre-loaded 1D numpy array of shape n_voxels
-    
+    seed_roi : str, pathlib.Path or numpy.ndarray
+        The input seed region of interest. Must be a brain mask delineating the voxels part of
+        the seed region. Can be either the full path to a Nifti file,
+        or a pre-loaded 1D array of shape (n_voxels,).
+
     z_corr : bool, default=False
-        Whether to output Fischer z transformed correlation values, instead of pearson's correlation.
+        Whether to output Fisher z transformed correlation values, instead of Pearson's r.
 
     Returns
     -------
-    SBC_dict : dictionary
-        Dictionary with img_id_list as keys, and each entry is the associated connectivity map.
+    SBC_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated connectivity map.
     """
 
     brain_mask_file = Path(brain_mask_file)
@@ -125,51 +126,50 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
     
 
 def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_maps, IC_idx=None, z_corr=False):
-    """
-    Convenient wrapper for deriving dual regression outputs from a intput timeseries_dict
+    """Compute dual regression outputs for each image ID within a timeseries_dict.
 
     Parameters
     ----------
-    timeseries_dict : dict, DataObject.timeseries_dict
-        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
-        The full path to the brain mask Nifti file.
+    brain_mask_file : str or pathlib.Path
+        The full path to the brain mask Nifti file,
+        e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
-    img_id_list : list, DataObject.img_id_list
-        List of image IDs that are keys for timeseries_dict
+    img_id_list : list of str
+        List of image IDs that are keys for ``timeseries_dict``,
+        e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    IC_maps : str, pathlib.Path, np.ndarray
-        The input ICA maps, can be either the full path to a Nifti file, 
-        or a pre-loaded numpy array of shape n_ICsXn_voxels
-    
-    IC_idx : list, default=None
-        Optionally, a list of index can be inputed to pre-select the IC components 
-        of interest. It must be a list of integer, and the outputs will only 
-        include those indices. If None, all components are outputed.
+    IC_maps : str, pathlib.Path or numpy.ndarray
+        The input ICA maps, can be either the full path to a Nifti file,
+        or a pre-loaded array of shape (n_ICs, n_voxels).
+
+    IC_idx : list of int, default=None
+        Optionally, a list of indices can be provided to pre-select the IC components
+        of interest, and the outputs will only include those indices.
+        If None, all components are included.
 
     z_corr : bool, default=False
-        Whether to output Fischer z transformed correlation values for 'DR_cross_corr'.
-        If False, the output is pearson's r.
+        Whether to output Fisher z transformed correlation values for ``'DR_cross_corr'``.
+        If False, the output is Pearson's r.
 
     Returns
     -------
-    DR_dict : dictionary
-        The output is a nested dictionary, the contains the following keys a the first
-        level: 'DR_maps', 'DR_amp', and 'DR_cross_corr'. Each of those key is a 
-        dictionary with keys corresponding to img_id_list, i.e. one entry
-        per img_id.
+    DR_dict : dict
+        Nested dictionary with ``img_id_list`` as keys. Each entry is a dictionary with the
+        following keys:
 
-        'DR_maps' : for each img_id, contains a 2D np.ndarray of shape n_voxelsxn_ICs
+        ``'DR_maps'`` : numpy.ndarray of shape (n_voxels, n_ICs)
             The set of dual regression maps.
-        'DR_time' : for each img_id, contains a 2D np.ndarray of shape n_timepointsxn_ICs
+        ``'DR_time'`` : numpy.ndarray of shape (n_timepoints, n_ICs)
             The timecourses of the dual regression components.
-        'DR_amp' : for each img_id, contains a scalar
+        ``'DR_amp'`` : numpy.ndarray of shape (n_ICs,)
             The amplitude value estimated from each map.
-        'DR_cross_corr' : for each img_id, contains a 2D np.ndarray of shape n_ICsxn_ICs
+        ``'DR_cross_corr'`` : numpy.ndarray of shape (n_ICs, n_ICs)
             A correlation matrix derived from the mutual correlation of
-            all DR component timecourse.
-
+            all DR component timecourses. The diagonal is NaN.
     """
 
     brain_mask_file = Path(brain_mask_file)
@@ -208,26 +208,29 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
 
 
 def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
-    """
-    Computes global connectivity across each img_id from timeseries_dict.
-    Global connectivity is defined as the mean correlation of each voxel 
-    with all other voxels in the brain.    
+    """Compute global connectivity for each image ID within a timeseries_dict.
+
+    Global connectivity is defined as the mean correlation of each voxel
+    with all other voxels in the brain.
 
     Parameters
     ----------
-    timeseries_dict : dict, DataObject.timeseries_dict
-        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    img_id_list : list, DataObject.img_id_list
-        List of image IDs that are keys for timeseries_dict
+    img_id_list : list of str
+        List of image IDs that are keys for ``timeseries_dict``,
+        e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
     verbose : bool, default=True
-        Whether to print the img_id for each iteration, which can be useful to track progress.
+        Whether to print the image ID for each iteration, which can be useful to track progress.
 
     Returns
     -------
-    GC_dict : dictionary
-        Dictionary with img_id_list as keys, and each entry is the associated global connectivity map.
+    GC_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated global
+        connectivity map.
     """
 
     GC_dict = {}
@@ -242,8 +245,7 @@ def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
 
 
 def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellation, roi_ids=None, z_corr=False, parcellated=False):
-    """
-    Compute a parcellated functional connectivity matrix for each img_id within a timeseries_dict.
+    """Compute a parcellated functional connectivity matrix for each image ID within a timeseries_dict.
 
     For each subject, the timeseries of each parcel is obtained by averaging across its constituent
     voxels, and a pairwise correlation matrix is then computed across all parcels.
@@ -251,42 +253,46 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
 
     Parameters
     ----------
-    timeseries_dict : dict, DataObject.timeseries_dict
-        Dictionary with img_id_list as keys, and each entry is the associated timeseries array.
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str, pathlib.Path, DataObject.brain_mask_file
-        The full path to the brain mask Nifti file.
+    brain_mask_file : str or pathlib.Path
+        The full path to the brain mask Nifti file,
+        e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
-    img_id_list : list, DataObject.img_id_list
-        List of image IDs that are keys for timeseries_dict.
+    img_id_list : list of str
+        List of image IDs that are keys for ``timeseries_dict``,
+        e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    parcellation : str, pathlib.Path, np.ndarray, or list
-        The input parcellation defining the ROIs. Accepted formats follow _parse_parcellation():
-        a path to a multi-label NIfTI, a pre-loaded 1D integer array, a list of single-label
-        NIfTI paths, or a list of pre-loaded binary 1D arrays.
+    parcellation : str, pathlib.Path, numpy.ndarray or list
+        The input parcellation defining the ROIs. Accepted formats are: a path to a multi-label
+        Nifti file, a pre-loaded 1D integer array, a list of single-label Nifti paths, or a list
+        of pre-loaded binary 1D arrays.
 
     roi_ids : list, default=None
         Optionally, a list of labels to assign to each parcel. Must match the number of parcels.
-        If None, integer labels are assigned automatically by _parse_parcellation().
+        If None, integer labels are assigned automatically.
 
     z_corr : bool, default=False
-        Whether to output Fischer z transformed correlation values, instead of Pearson's r.
+        Whether to output Fisher z transformed correlation values, instead of Pearson's r.
         Note that the diagonal is set to NaN after the transform is applied.
-        
-    parcellated : bool, default=False 
-        Whether the input time series are already parcellated rather than being voxelwise.
-        If parcellated=True, each entry in timeseries_dict must have shape (timepoints × ROIs).
-        If parcellated=True, parcellation, brain_mask_file and roi_ids are not used by the function. 
-        Moreover, 'parcel_ids' is not an entry in the putput dictionary.       
+
+    parcellated : bool, default=False
+        Whether the input timeseries are already parcellated rather than being voxelwise.
+        If ``parcellated=True``, each entry in ``timeseries_dict`` must have shape
+        (n_timepoints, n_ROIs), and ``parcellation``, ``brain_mask_file`` and ``roi_ids`` are not
+        used by the function. Moreover, ``'parcel_ids'`` is not an entry in the output dictionary.
 
     Returns
     -------
-    FCM_dict : dictionary
-        Nested dictionary with img_id_list as keys. Each entry contains:
+    FCM_dict : dict
+        Nested dictionary with ``img_id_list`` as keys. Each entry is a dictionary with the
+        following keys:
 
-        'parcel_ids' : list
+        ``'parcel_ids'`` : list
             The ordered list of parcel labels corresponding to the rows/columns of the matrix.
-        'matrix' : np.ndarray of shape n_parcels x n_parcels
+        ``'matrix'`` : numpy.ndarray of shape (n_parcels, n_parcels)
             The functional connectivity matrix for that subject. The diagonal is NaN.
     """
     if not parcellated:
@@ -318,13 +324,17 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
 
 
 def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, window_length=10, step_size=1, min_censored_window_length=1, fc_func=None, fc_kwargs={}):
-    """Extract sliding windows of fMRI timeseries data across subjects, with optional
-    motion censoring support and optional per-window functional connectivity computation.
+    """Extract sliding windows of timeseries for each image ID within a timeseries_dict.
+
+    Sliding windows support motion censoring, and optionally the computation of functional
+    connectivity within each window.
 
     For each subject, windows are stepped across the full original temporal extent of
     the scan. When a censoring mask is provided, censored frames are excluded from each
     window's data, so a window may contain fewer rows than ``window_length``.
-    If ``skip_censored_windows=True``, only fully contiguous (uncensored) windows are retained.
+    Windows with fewer remaining frames than ``min_censored_window_length`` are replaced by None;
+    setting ``min_censored_window_length=window_length`` thus only retains fully contiguous
+    (uncensored) windows.
 
     If ``fc_func`` is provided, each window's timeseries is passed through that function
     and the output connectivity array is stored in place of the raw timeseries.
@@ -334,17 +344,21 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
 
     Parameters
     ----------
-    timeseries_dict : dict[str, numpy array]
-        Mapping from image ID to timeseries array of shape (n_retained_frames, n_voxels),
-        where n_retained_frames is the number of frames after censoring has been applied upstream.
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array
+        of shape (n_retained_frames, n_voxels), where n_retained_frames is the number of frames
+        after censoring has been applied upstream,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    img_id_list : list[str]
+    img_id_list : list of str
         Ordered list of image IDs to process. Must be keys of ``timeseries_dict``.
 
-    censoring_mask_dict : dict[str, numpy array], default=None
-        Mapping from image ID to a boolean array of length n_total_frames (i.e. the original,
-        pre-censoring frame count). True indicates a frame was retained; False indicates it was
-        censored. If an image ID is absent, no censoring is applied for that subject.
+    censoring_mask_dict : dict, default=None
+        Dictionary with image IDs as keys, and each entry is a boolean array of length
+        n_total_frames (i.e. the original, pre-censoring frame count), e.g.
+        :attr:`rubella.data_obj.DataObject.censoring_mask`. True indicates a frame was retained;
+        False indicates it was censored. If an image ID is absent, no censoring is applied for
+        that subject.
 
     window_length : int, default=10
         Number of original (pre-censoring) frames spanned by each window.
@@ -353,22 +367,40 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         Number of frames to advance between successive windows. Must be >= 1.
 
     min_censored_window_length : int, default=1
-        This specifies the minimal actual length of each window (after applying censoring). Any
+        The minimal actual length of each window (after applying censoring). Any
         window that does not meet this threshold is replaced by None.
-        If min_censored_window_length = window_length, any window with 1 or more censored frame
-        is replaced with None.
+        If ``min_censored_window_length=window_length``, any window with 1 or more censored frames
+        is replaced by None.
 
     fc_func : callable, default=None
-        A functional connectivity function to apply to each window's timeseries. Must follow
-        the package convention of accepting ``timeseries_dict`` and ``img_id_list`` as keyword
-        arguments. It should return a dict keyed by img_id, with each value being the
-        connectivity array for that subject's window. If None, raw timeseries windows
-        are returned.
+        A functional connectivity function to apply to each window's timeseries, e.g.
+        :func:`seed_based_FC`. Must follow the package convention of accepting
+        ``timeseries_dict`` and ``img_id_list`` as keyword arguments. It should return a
+        dictionary with image IDs as keys, with each value being the connectivity array for that
+        subject's window. If None, raw timeseries windows are returned.
 
     fc_kwargs : dict, default={}
-        Additional keyword arguments forwarded to ``fc_func`` (e.g. brain_mask_file, seed_roi,
-        z_corr). The ``timeseries_dict`` and ``img_id_list`` arguments are injected automatically
-        and should not be included here.
+        Additional keyword arguments forwarded to ``fc_func`` (e.g. ``brain_mask_file``,
+        ``seed_roi``, ``z_corr``). The ``timeseries_dict`` and ``img_id_list`` arguments are
+        injected automatically and should not be included here.
+
+    Returns
+    -------
+    sliding_window_dict : dict
+        Dictionary with the following keys:
+
+        ``'sliding_windows'`` : dict
+            For each image ID, a list with one array per window (or None for a window that does
+            not meet ``min_censored_window_length``). If ``fc_func`` is None, each array has shape
+            (n_uncensored_frames_in_window, n_voxels). If ``fc_func`` is provided, each array is
+            the connectivity output for that window, with shape determined by ``fc_func``.
+        ``'sliding_windows_idx'`` : dict
+            For each image ID, a list of 1D integer arrays containing the indices into the
+            retained timeseries (rows of ``timeseries_dict`` values) used to build each window.
+            Useful for traceability and cross-referencing with other per-frame metadata.
+        ``'window_censoring_mask'`` : dict
+            For each image ID, a list of boolean arrays of length ``window_length``, giving the
+            censoring mask of the original frames spanned by each window.
 
     Examples
     --------
@@ -401,22 +433,6 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
     ...         'z_corr': True,
     ...     },
     ... )
-
-    Returns
-    -------
-    sliding_window_dict : dict
-        Dictionary with the following keys:
-
-        'sliding_windows' : dict[str, list[numpy array]]
-            For each image ID, a list of arrays per window. If ``fc_func`` is None, each array
-            has shape (n_uncensored_frames_in_window, n_voxels). If ``fc_func`` is provided,
-            each array is the connectivity output for that window, with shape determined by
-            ``fc_func``.
-
-        'sliding_windows_idx' : dict[str, list[numpy array]]
-            For each image ID, a list of 1-D integer arrays containing the indices into the
-            retained timeseries (rows of ``timeseries_dict`` values) used to build each window.
-            Useful for traceability and cross-referencing with other per-frame metadata.
     """
 
     if step_size < 1:

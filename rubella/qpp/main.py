@@ -3,8 +3,9 @@ from ..basic import vcorrcoef
 
 
 def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 0.1, max_iter=20, starting_idx='random'):
-    '''
-    Automated detection of a quasi-periodic pattern (QPP) as described in: 
+    '''Detect a quasi-periodic pattern (QPP) from a set of sliding windows.
+
+    The automated detection of a QPP is carried as described in:
     Majeed, W., ..., & Keilholz, S. D. (2011). Spatiotemporal dynamics of low frequency BOLD fluctuations in rats 
     and humans. Neuroimage, 54(2), 1140-1150.
 
@@ -16,8 +17,8 @@ def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 
     3. Repeat 2. until the previous template and the updated template are mutually correlated above 0.999, after which the
     updated template defines the finalized QPP.
 
-    This function assumes that rubella.data.compute.get_sliding_windows was executed on data_dict a priori, with 
-    skip_censored_windows=True to ensure contiguous windows.
+    This function assumes that :func:`rubella.basic.get_sliding_windows` was executed a priori,
+    with ``min_censored_window_length=window_length`` to ensure contiguous windows.
     '''
 
     img_id_list = list(sliding_window_dict['sliding_windows'].keys())
@@ -89,8 +90,9 @@ def compute_QPP(sliding_window_dict, window_length, template_to_window_thresh = 
 
 
 def count_QPP_occurence(sliding_window_dict, QPP, template_to_window_thresh = 0.1, remove_consecutives=False):
-    '''
-    Count QPP occurence within each scan as the number of windows that pass a correlation 
+    '''Count the occurrences of a QPP within each scan.
+
+    QPP occurrences are counted as the number of windows that pass a correlation
     threshold relative to the QPP template, as described in:
     Belloy, M. E., ... & Verhoye, M. (2018). Dynamic resting state fMRI analysis in mice reveals 
     a set of Quasi-Periodic Patterns and illustrates their relationship with the global signal. 

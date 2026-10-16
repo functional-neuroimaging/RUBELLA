@@ -12,70 +12,82 @@ def plot_brain(data,brain_mask_file,template_file=None,
                cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
                fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
                ):
-    '''
-    Function for plotting a single brain map as a series of brain slices along one of the three cardinal plane,
-    overlayed on top of a template in the same space.
+    """Plot a brain map as a series of slices along one of the three cardinal planes.
+
+    The brain map can be overlaid on top of a template image in the same space.
 
     Parameters
     ----------
-    data : 1D array
-        The vector representing the brain map. The vector indices must have been previously generated using brain_mask_file.
+    data : numpy.ndarray
+        The 1D array of shape (n_voxels,) representing the brain map. The array indices must
+        have been previously generated using ``brain_mask_file``.
 
-    brain_mask_file : str
-        Full path to the brain mask Nifti file 
+    brain_mask_file : str or pathlib.Path
+        Full path to the brain mask Nifti file.
 
-    template_file : str
-        File path to the background image
+    template_file : str or pathlib.Path, default=None
+        Full path to the background template image. If None, no background is plotted.
 
-    fig : matplotlib.pyplot.figure
-        A matplotlib figure. If None, then the figure is automatically generated
+    fig : matplotlib.figure.Figure, default=None
+        A matplotlib figure. If None, the figure is automatically generated
         based on the finalized brain map plot dimensions.
 
-    ax : matplotlib.pyplot.axis
-        The ax associated to fig. If None, there must also be fig=None
-    
-    scale : float
-        A scaling factor for controlling the figure size when fig=None.
+    ax : matplotlib.axes.Axes, default=None
+        The axis of ``fig`` to plot on. If None, ``fig`` must also be None.
 
-    plane : str
-        Select a image plane among 'sagittal', 'coronal', or 'horizontal'
+    plot_size_scale : float, default=0.1
+        A scaling factor for controlling the figure size when ``fig=None``.
 
-    selected_slices : list or 'all'
-        The list of slice indices along the desired plane to plot. If 'all'
-        is inputed, all slices are plotted.
-    
-    slices_per_row : int
-        This controls the number of slices to plot in one row within the plot.
+    plane : str, default='coronal'
+        The image plane among ``'sagittal'``, ``'coronal'``, or ``'horizontal'``.
+
+    selected_slices : list of int or str, default='all'
+        The list of slice indices along the desired plane to plot. If ``'all'``,
+        all slices containing brain voxels are plotted.
+
+    slices_per_row : int, default=None
+        The number of slices to plot in one row within the plot.
         If None, all slices are plotted in one row.
-        
-    cmap : str
-        Input to the matplotlib colormap.
 
-    vmax : float
+    cmap : str, default='cold_hot'
+        Name of the matplotlib colormap.
+
+    vmax : float, default=None
         The max value for the colormap. If None, it is set to the value of the 98th percentile
         of the voxel value distribution.
 
-    vmin : float
-        The minimum value for the colormap. If None, it is set to -vmax.
+    vmin : float, default=None
+        The minimum value for the colormap. If None, it is set to ``-vmax``.
 
-    alpha : float, np.ndarray
+    alpha : float or numpy.ndarray, default=1
         The transparency level of the brain map overlay. Must be between 0 and 1.
-        It can be an array of the same shape as data to provide a per voxel alpha
+        It can be an array of the same shape as ``data`` to provide a per voxel alpha
         value.
 
-    plot_cbar : bool
+    plot_cbar : bool, default=False
         Whether to plot a colorbar.
-                       
-    fixed_threshold : float
-        Every value below this threshold are hidden in the plot.
 
-    percent_thresholding : bool
-        Whether to automatically threshold the image to only capture the top X% 
-        of voxels with highest value. The percentage is set by top_percent.
-        
-    top_percent : float
-        The percentage value for percent_thresholding.
-    '''
+    fixed_threshold : float, default=None
+        Voxels with an absolute value below this threshold are hidden in the plot.
+
+    percent_thresholding : bool, default=False
+        Whether to automatically threshold the image to only display the top X% of voxels
+        with the highest absolute value. The percentage is set by ``top_percent``.
+
+    top_percent : float, default=10
+        The percentage value for ``percent_thresholding``.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure containing the plot.
+
+    ax : matplotlib.axes.Axes
+        The axis containing the plot.
+
+    cbar : matplotlib.colorbar.Colorbar or None
+        The colorbar, or None if ``plot_cbar=False``.
+    """
 
     weighted_alpha = False
     if isinstance(alpha, np.ndarray):
@@ -176,25 +188,43 @@ def plot_many_brains(
         fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
         ):
     
-    '''
-    Function for plotting a series of brain in one figure with multiple rows/columns.
+    """Plot a series of brain maps in one figure, with multiple rows and columns.
+
+    Each brain map is plotted with :func:`plot_brain`, and this function takes all the same
+    parameters except ``data``, ``ax`` and ``fig``, which are replaced by the parameters below.
 
     Parameters
     ----------
-    This function inherits all parameters from plot_brain(), except the following:
+    data_list : list of numpy.ndarray
+        List of 1D arrays of shape (n_voxels,), each representing a brain map to plot.
 
-    data_list : list
-        List of 1D vector brain maps to plot.
+    brain_mask_file : str or pathlib.Path
+        Full path to the brain mask Nifti file.
 
-    ax_list : list
-        List of matplotlib axes for plotting data_list. If None, the figure is automatically generated along 
-        with the list of axes.
+    fig : matplotlib.figure.Figure, default=None
+        A matplotlib figure. If None, the figure is automatically generated along with
+        ``ax_list``.
 
-    num_brain_per_row : int
-        If ax_list=None, this controls the number of brain maps to plot along a single row of the figure.
-        Elements in data_list are plotted to fill a row from left to right before continuing onto the next row.
+    ax_list : list of matplotlib.axes.Axes, default=None
+        List of axes of ``fig`` for plotting each entry of ``data_list``. If None, ``fig`` must
+        also be None.
 
-    '''
+    num_brain_per_row : int, default=1
+        If ``ax_list=None``, the number of brain maps to plot along a single row of the figure.
+        Entries of ``data_list`` are plotted to fill a row from left to right before continuing
+        onto the next row.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure containing the plots.
+
+    ax_list : list of matplotlib.axes.Axes
+        The axes containing each plot.
+
+    cbar_list : list
+        The colorbar of each plot, as returned by :func:`plot_brain`.
+    """
     
     if selected_slices=='all':
         mask_arr = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file))
