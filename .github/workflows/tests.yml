@@ -1,0 +1,39 @@
+name: Run tests
+
+# runs the pytest suite in the environment defined by rubella_env.yml, to catch bugs before merging
+on:
+  pull_request:
+  workflow_dispatch:  # adds a "Run workflow" button to run the tests on demand
+
+permissions:
+  contents: read
+
+# if new commits are pushed to a pull request, cancel the previous run that is still in progress
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}  # a login shell is needed for the conda environment to be activated
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Create the conda environment from rubella_env.yml
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          environment-file: rubella_env.yml
+          activate-environment: rubella
+
+      - name: Install rubella and pytest
+        run: |
+          pip install --no-deps -e .  # dependencies are already provided by rubella_env.yml
+          pip install pytest
+
+      - name: Run the tests
+        run: pytest tests/ -rs  # -rs prints the reason for each skipped test

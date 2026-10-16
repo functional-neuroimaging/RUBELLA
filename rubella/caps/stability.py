@@ -181,7 +181,7 @@ def stability_report(caps_l, X, k_range, pass_threshold=0.5):
             print("\r","Changing labels to match input X.", end="")
             caps.labels_ = caps.predict(X)
 
-    VE = [caps.estimate_R2(X) for caps in caps_l]
+    VE = [caps.estimate_R2(X)[1] for caps in caps_l] # keep only r2_overall
     robustness = [caps.cross_rep_sim for caps in caps_l]
     from sklearn.metrics import calinski_harabasz_score
     var_ratio = [calinski_harabasz_score(X, caps.labels_) for caps in caps_l]

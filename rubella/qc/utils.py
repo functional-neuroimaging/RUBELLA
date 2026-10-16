@@ -1,6 +1,6 @@
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dice_coefficient
-from rabies.analysis_pkg.diagnosis_pkg.analysis_QC import threshold_top_percent
+from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
 
 
 def get_group_stats(FC_map_dict, avg_type='median', top_percent=10):

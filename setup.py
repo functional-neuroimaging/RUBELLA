@@ -20,7 +20,6 @@ REQUIRES_PYTHON = '>=3.9.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'pathlib',
     'matplotlib>=3.3.4',
     'nibabel>=3.2.1',
     'nilearn>=0.7.1',
@@ -30,7 +29,7 @@ REQUIRED = [
     'scipy>=1.8.1',
     'seaborn>=0.11.1',
     'simpleitk>=2.5.0',
-    'rabies>=0.6.0',
+    'rabies>=0.6.2',
 ]
 
 # What packages are optional?
@@ -130,7 +129,7 @@ setup(
         'Intended Audience :: Science/Research',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python :: Implementation :: PyPy'
     ],

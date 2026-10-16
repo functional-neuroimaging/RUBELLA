@@ -34,6 +34,8 @@ $ git status # now it is tracked
   Changes to be committed:
     (use "git restore --staged <file>..." to unstage)
           new file:   my_new_function.py
+# run the test suite from the repository root to check that nothing is broken (requires `pip install pytest` once)
+$ pytest tests/
 # commit your changes
 $ git commit -m "the new script my_new_function.py does XYZ"
 $ git status # all tracked changes are commited
