@@ -1,6 +1,7 @@
 import SimpleITK as sitk
 import pathlib
 from pathlib import Path
+import numpy as np
 import pandas as pd
 from .utils import load_img_to_array
 
@@ -60,9 +61,11 @@ class DataObject:
     brain_mask_file : pathlib.Path
         A copy of the input ``brain_mask_file``.
 
-    volume_idx : numpy.ndarray
-        The brain mask loaded as a boolean numpy array. These are the indices used to load
-        input 3D volumes into a 1D concatenated space format.
+    volume_coords : numpy.ndarray
+        A 3D array with the same shape as the brain mask array, where voxels outside the brain
+        mask are NaN, and each voxel inside the mask is providing the index value for where 
+        this voxel can be accessed inside the arrays loaded with :func:`rubella.utils.load_img_to_array` 
+        (e.g. the columns of each timeseries in :attr:`timeseries_dict`).
 
     img_id_list : list of str
         The image IDs loaded in the DataObject. These are also the keys to access values inside
@@ -81,11 +84,12 @@ class DataObject:
 
     def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
         # the brain mask file defines the voxel commonspace to load each volume
-        brain_mask_file = Path(brain_mask_file)
-        self.brain_mask_file = brain_mask_file
-        mask_img = sitk.ReadImage(brain_mask_file)
-        volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
-        self.volume_idx = volume_idx
+        self.brain_mask_file = Path(brain_mask_file)
+
+        # for each brain voxel, its index in the 1D vector format of loaded images; NaN outside the brain
+        volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(self.brain_mask_file)).astype(bool)
+        self.volume_coords = np.full(volume_idx.shape, np.nan)
+        self.volume_coords[volume_idx] = np.arange(volume_idx.sum())
 
         if timeseries_file_list:
             self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
