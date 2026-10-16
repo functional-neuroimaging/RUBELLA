@@ -2,7 +2,7 @@ import SimpleITK as sitk
 import pathlib
 from pathlib import Path
 import pandas as pd
-from .basic import load_img_to_array
+from .utils import load_img_to_array
 
 class DataObject:
     """Group-level container of timeseries images in a common 2D time-by-voxel format.
@@ -243,7 +243,7 @@ class DataObject:
     def _load_img_to_array(self, img_file, input_is_mask=False):
         """Load an input Nifti image to the 2D array format of the DataObject.
 
-        Wrapper for :func:`rubella.basic.load_img_to_array`, using the DataObject's
+        Wrapper for :func:`rubella.utils.load_img_to_array`, using the DataObject's
         ``brain_mask_file``. See that function for more details.
 
         Parameters

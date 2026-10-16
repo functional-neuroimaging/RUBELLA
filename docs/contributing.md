@@ -60,7 +60,7 @@ def my_new_function(timeseries_dict, img_id_list, brain_mask_file, threshold=0.5
     """Compute XYZ for each image ID within a timeseries_dict.
 
     A longer description of what the function does, how it does it, and any assumption about
-    the inputs. Refer to related functions with :func:`rubella.basic.seed_based_FC`.
+    the inputs. Refer to related functions with :func:`rubella.basic_fc.seed_based_FC`.
 
     Parameters
     ----------
@@ -106,7 +106,7 @@ These are the detailed instructions:
   e.g. `bool, default=False`.
 - **Code formatting**: use double backticks for parameter names and literal values,
   e.g. ` ``img_id_list`` ` or ` ``'correlation'`` `. Single backticks render as plain italics.
-- **Links**: refer to other RUBELLA objects with `` :func:`rubella.basic.seed_based_FC` ``,
+- **Links**: refer to other RUBELLA objects with `` :func:`rubella.basic_fc.seed_based_FC` ``,
   `` :class:`DataObject` ``, `` :meth:`load_censoring_mask` `` or `` :attr:`img_id_list` ``,
   which become clickable links in the documentation.
 - **Methods that modify an object**: a method that sets attributes on its object returns `self`.

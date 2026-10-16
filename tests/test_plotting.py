@@ -5,7 +5,7 @@ The plots are only checked to run without error, not to look right.
 import numpy as np
 
 from rubella import plotting
-from rubella.basic import seed_based_FC
+from rubella.basic_fc import seed_based_FC
 from rubella.qc import report, utils
 
 

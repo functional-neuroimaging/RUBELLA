@@ -22,24 +22,37 @@ depth: 1
    :undoc-members:
 ```
 
-## `rubella.basic` - Basic analyses
+## `rubella.basic_fc` - Basic functional connectivity
 
 ```{eval-rst}
-.. currentmodule:: rubella.basic
+.. currentmodule:: rubella.basic_fc
+
+.. autosummary::
+   :nosignatures:
+
+   seed_based_FC
+   compute_dual_regression
+   compute_global_connectivity
+   compute_FC_matrix
+   get_sliding_windows
+
+.. automodule:: rubella.basic_fc
+   :members:
+   :undoc-members:
+```
+
+## `rubella.utils` - Data format utilities
+
+```{eval-rst}
+.. currentmodule:: rubella.utils
 
 .. autosummary::
    :nosignatures:
 
    load_img_to_array
-   vcorrcoef
-   seed_based_FC
-   compute_dual_regression
-   compute_global_connectivity
-   compute_FC_matrix
    get_concat_timeseries
-   get_sliding_windows
 
-.. automodule:: rubella.basic
+.. automodule:: rubella.utils
    :members:
    :undoc-members:
 ```
