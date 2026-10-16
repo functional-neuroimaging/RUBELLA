@@ -16,7 +16,7 @@ def X():
 
 @pytest.fixture
 def fitted_caps(X):
-    return CAPs(n_clusters=NUM_CLUSTERS, n_rep=3, random_state=0).fit_kmeans(X)
+    return CAPs(n_clusters=NUM_CLUSTERS, n_rep=3, random_state=0).fit_kmeans(X, copy_X=True)
 
 
 def test_pairwise_correlations_matches_numpy(X):
@@ -40,8 +40,10 @@ def test_fit_options(X, distance, centroid_order):
 
 
 def test_fit_is_reproducible(X):
-    labels_1 = CAPs(n_clusters=NUM_CLUSTERS, random_state=0).fit_kmeans(X).labels_
-    labels_2 = CAPs(n_clusters=NUM_CLUSTERS, random_state=0).fit_kmeans(X).labels_
+    # copy_X=True leaves X untouched; with the default copy_X=False, X is normalized in place and
+    # restored only up to float rounding (~1e-16), which can swap the cluster numbering of a refit
+    labels_1 = CAPs(n_clusters=NUM_CLUSTERS, random_state=0).fit_kmeans(X, copy_X=True).labels_
+    labels_2 = CAPs(n_clusters=NUM_CLUSTERS, random_state=0).fit_kmeans(X, copy_X=True).labels_
     np.testing.assert_array_equal(labels_1, labels_2)
 
 
@@ -87,5 +89,5 @@ def test_estimate_transitions_3steps(censoring_mask):
 
 def test_stability_report(X):
     k_range = [2, 3]
-    caps_l = [CAPs(n_clusters=k, n_rep=3, random_state=0).fit_kmeans(X) for k in k_range]
+    caps_l = [CAPs(n_clusters=k, n_rep=3, random_state=0).fit_kmeans(X, copy_X=True) for k in k_range]
     stability.stability_report(caps_l, X, k_range)

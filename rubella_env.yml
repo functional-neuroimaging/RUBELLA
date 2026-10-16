@@ -4,7 +4,6 @@ channels:
   - simpleitk
 dependencies:
   - python=3.9
-  - pathlib
   - matplotlib
   - nibabel
   - nilearn

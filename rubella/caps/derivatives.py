@@ -73,13 +73,13 @@ def estimate_transitions(labels, k, censoring_mask=None, transition_step_size=1,
 
 def estimate_transitions_3steps(labels, k, censoring_mask=None, exclude_steadystate=False):
     if censoring_mask is None:
+        filled_labels = labels
+    else:
         # because censored frames are set to -1, they are not counted in the transition counts below
-        # censored frames break the transition estimation, until there is again two consecutive 
+        # censored frames break the transition estimation, until there is again two consecutive
         # uncensored transitions
         filled_labels = np.array([-1]*len(censoring_mask))
         filled_labels[censoring_mask] = labels
-    else:
-        filled_labels = labels
 
     if exclude_steadystate:
         unsteady_filled_labels = [filled_labels[0]]
