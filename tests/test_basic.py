@@ -1,4 +1,6 @@
 """Tests for rubella.basic, using the fake dataset from conftest.py."""
+import shutil
+
 import numpy as np
 import pytest
 import SimpleITK as sitk
@@ -20,7 +22,12 @@ def test_load_img_to_array(fake_dataset):
     assert timeseries.shape == (NUM_FRAMES, fake_dataset['num_voxels'])
 
 
-@pytest.mark.parametrize('input_is_mask', [False, True])
+@pytest.mark.parametrize('input_is_mask', [
+    False,
+    # resampling a mask calls the ANTs antsApplyTransforms command, which may not be installed
+    pytest.param(True, marks=pytest.mark.skipif(shutil.which('antsApplyTransforms') is None,
+                                                reason="ANTs (antsApplyTransforms) is not installed")),
+])
 def test_load_img_to_array_resamples(fake_dataset, input_is_mask):
     # an image at twice the resolution of the brain mask, covering the same space
     high_res_arr = fake_dataset['mask_arr'].repeat(2, axis=0).repeat(2, axis=1).repeat(2, axis=2)
