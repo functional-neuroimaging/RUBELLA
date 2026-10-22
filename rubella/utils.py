@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path
 
 
-def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_to_brain_mask=True):
+def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_to_brain_mask=True, verbose=True):
     """Load a Nifti image as an array, including only the voxels within the brain mask.
 
     The input brain mask determines the expected image array spatial dimensions and resolution.
@@ -33,6 +33,9 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_t
         If True, and the input image array size does not match the array size of the ``brain_mask_file``,
         the input image is resampled onto the image grid of the brain mask so the data can be loaded
         in a commonspace. If False, any mismatch throws an error.
+
+    verbose : bool, default=True
+        Whether to print the warning when resampling the input.
         
     Returns
     -------
@@ -59,7 +62,8 @@ def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_t
         The image is resampled with the assumption that it occupies 
         the same space as the brain mask.
         """
-            print(warning_str)
+            if verbose:
+                print(warning_str)
             if input_is_mask:
                 from rabies.utils import antsApplyTransforms
                 import tempfile, shutil

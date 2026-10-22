@@ -244,7 +244,7 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def _load_img_to_array(self, img_file, input_is_mask=False, resample_to_brain_mask=True):
+    def _load_img_to_array(self, img_file, input_is_mask=False, resample_to_brain_mask=True, verbose=True):
         """Load an input Nifti image to the 2D array format of the DataObject.
 
         Wrapper for :func:`rubella.utils.load_img_to_array`, using the DataObject's
@@ -264,10 +264,13 @@ class DataObject:
             the input image is resampled onto the image grid of the brain mask so the data can be loaded
             in a commonspace. If False, any mismatch throws an error.
             
+        verbose : bool, default=True
+            Whether to print the warning when resampling the input.
+            
         Returns
         -------
         img_array : numpy.ndarray
             The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
         """
         return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask, 
-                                 resample_to_brain_mask=resample_to_brain_mask)
+                                 resample_to_brain_mask=resample_to_brain_mask, verbose=verbose)
