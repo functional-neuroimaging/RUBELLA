@@ -25,6 +25,8 @@ def group_stats_QC_plot(
 
     selected_slices = plotting.select_slices_for_plotting(slice_selection, brain_mask_file, plane)
     n_slices = len(selected_slices)
+    if not slices_per_row:
+        slices_per_row = n_slices # all slices in 1 row
     nrows_map = int(np.ceil(n_slices/slices_per_row))
 
     fig,axes = plt.subplots(num_maps,1, figsize=(slices_per_row*plot_scale,num_maps*nrows_map*plot_scale), constrained_layout=True)
@@ -43,7 +45,7 @@ def group_stats_QC_plot(
                 fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f't-value', rotation = 270, labelpad=10)
-        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
+        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax] if threshold else [-vmax,0,vmax])
         n+=1
 
 
@@ -60,7 +62,7 @@ def group_stats_QC_plot(
                 fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f'Dataset median', rotation = 270, labelpad=10)
-        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
+        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax] if threshold else [-vmax,0,vmax])
         n+=1
 
     if 'sd' in include_stat:
@@ -90,7 +92,7 @@ def group_stats_QC_plot(
                 fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f'Percent overlap', rotation = 270, labelpad=10)
-        cbar.set_ticks([fixed_threshold,vmax])
+        cbar.set_ticks([fixed_threshold,vmax] if threshold else [0,vmax])
         n+=1
 
     qc_keys = list(qc_data_dict.keys())
@@ -111,7 +113,7 @@ def group_stats_QC_plot(
                 fixed_threshold=fixed_threshold, # image thresholding
                 )
         cbar.set_label(f'{key} corr.', rotation = 270, labelpad=10)
-        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax])
+        cbar.set_ticks([-vmax,-fixed_threshold,fixed_threshold,vmax] if threshold else [-vmax,0,vmax])
         n+=1
 
     return fig,axes
