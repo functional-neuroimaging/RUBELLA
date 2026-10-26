@@ -35,5 +35,5 @@ def test_qc_group_stats(data_obj, seed_roi, fake_dataset):
     assert len(dice_list) == len(SBC_dict)
 
     report.group_stats_QC_plot(SBC_dict, data_obj.brain_mask_file, template_file=None,
-                               selected_slices=[1, 2, 3], slices_per_row=3,
+                               slice_selection=[1, 2, 3], slices_per_row=3,
                                qc_data_dict={'fake_motion': [0.1, 0.5, 0.2]})

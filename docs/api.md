@@ -49,7 +49,7 @@ depth: 1
 .. autosummary::
    :nosignatures:
 
-   load_img_to_array
+   load_img_to_masked_array
    get_img_from_array
    get_concat_timeseries
 

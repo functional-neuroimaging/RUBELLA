@@ -7,89 +7,186 @@ import numpy as np
 from pathlib import Path
 
 
-def load_img_to_array(img_file, brain_mask_file, input_is_mask=False, resample_to_brain_mask=True, verbose=True):
-    """Load a Nifti image as an array, including only the voxels within the brain mask.
+def load_img_to_masked_array(input_img, brain_mask, data_type, resample_to_brain_mask=True, verbose=True):
+    """Load an input image as an array, including only the voxels within the brain mask.
 
-    The input brain mask determines the expected image array spatial dimensions and resolution.
-    If the input ``img_file`` does not match the resolution of the brain mask, the image
-    is resampled to match the brain mask volume before being loaded as an array (with 
-    ``resample_to_brain_mask=True`` by default).
-    IMPORTANTLY: this assumes that despite a mismatch in resolution, the two images occupy the
-    same space - if not, the loaded array is likely to be empty after resampling to the brain mask.
+    The input can be provided as a Nifti file, a SimpleITK image or a nibabel image, and
+    ``data_type`` determines how the input is resampled (if needed) and which assumptions about
+    its values are checked:
+
+    * ``'mask'``: a 3D binary mask (e.g. a seed region), with values of only 0 and 1.
+    * ``'labels'``: a 3D parcellation, with integer values (0 is the background).
+    * ``'continuous'``: quantitative data, either a 3D map or a 4D timeseries.
+
+    The brain mask determines the expected image grid, i.e. the array size, voxel spacing, origin
+    and orientation. If the input image grid does not match the brain mask, the image is resampled
+    onto the brain mask grid before being loaded as an array (with ``resample_to_brain_mask=True``
+    by default). IMPORTANTLY: resampling does not register the images, and assumes that the two
+    images are already aligned in physical space - if not, the loaded array is likely to be
+    misaligned or empty after resampling.
 
     Parameters
     ----------
-    img_file : str or pathlib.Path
-        Path to the input Nifti file.
+    input_img : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The input image, either as the path to a Nifti file or a pre-loaded image.
 
-    brain_mask_file : str or pathlib.Path
-        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, which is used to determine brain voxel array indices. Either the path
+        to a Nifti file or a pre-loaded image.
 
-    input_is_mask : bool, default=False
-        Whether the input ``img_file`` is itself a brain mask or parcellation, in which case the
-        resampling is carried using the antsApplyTransforms GenericLabel interpolator.
+    data_type : str
+        The type of data contained in ``input_img``, among ``'mask'``, ``'labels'`` or
+        ``'continuous'``.
 
     resample_to_brain_mask : bool, default=True
-        If True, and the input image array size does not match the array size of the ``brain_mask_file``,
-        the input image is resampled onto the image grid of the brain mask so the data can be loaded
-        in a commonspace. If False, any mismatch throws an error.
+        If True, and the input image grid (array size, spacing, origin or orientation) does not
+        match ``brain_mask``, the input image is resampled onto the image grid of the brain mask so the data can be loaded
+        in a commonspace. Masks and labels are resampled with the antsApplyTransforms GenericLabel
+        interpolator, and continuous data with linear interpolation. If False, any mismatch throws
+        an error.
 
     verbose : bool, default=True
-        Whether to print the warning when resampling the input.
-        
+        Whether to print warnings, i.e. when resampling the input, or if continuous data contain
+        NaN or infinite values.
+
     Returns
     -------
     img_array : numpy.ndarray
-        The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
+        The output image array, 1D of shape (n_voxels,) for a 3D input image, or 2D of shape
+        (n_timepoints, n_voxels) for a 4D input image. The array is of type bool for
+        ``data_type='mask'``, int for ``'labels'``, and float for ``'continuous'``
+        (the float precision of the input image is kept, e.g. float32).
     """
-    img_file = Path(img_file)
-    brain_mask_file = Path(brain_mask_file)
-    sitk_img = sitk.ReadImage(img_file)
+    if data_type not in ['mask', 'labels', 'continuous']:
+        raise ValueError(f"data_type must be 'mask', 'labels' or 'continuous', got {data_type} instead.")
 
-    mask_img = sitk.ReadImage(brain_mask_file)
+    sitk_img = _read_sitk_image(input_img)
+    mask_img = _read_sitk_image(brain_mask)
     volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
 
-    input_size=sitk_img.GetSize()
-    mask_size=mask_img.GetSize()
-    if not input_size[:3]==mask_size:
-        warning_str=f"""
-        Warning: The input image array of size {input_size} does not match the 
-        brain mask array of size {mask_size}.
-        """
+    dim = sitk_img.GetDimension()
+    if data_type in ['mask', 'labels'] and not dim==3:
+        raise ValueError(f"An input of data_type='{data_type}' must be a 3D image, got a {dim}D image instead.")
+    elif not dim in [3, 4]:
+        raise ValueError(f"The input image must be 3D or 4D, got a {dim}D image instead.")
+
+    # check the voxel values before resampling, since resampling can change them
+    if data_type == 'mask':
+        arr = sitk.GetArrayFromImage(sitk_img)
+        if not np.isin(arr, [0, 1]).all():
+            unexpected = np.unique(arr[~np.isin(arr, [0, 1])])
+            raise ValueError(f"The input mask is not binary. Unexpected values: {unexpected.tolist()[:10]}")
+    elif data_type == 'labels':
+        arr = sitk.GetArrayFromImage(sitk_img)
+        if not (arr == np.round(arr)).all():
+            unexpected = np.unique(arr[arr != np.round(arr)])
+            raise ValueError(f"The input labels contain non-integer values: {unexpected.tolist()[:10]}")
+
+    grid_mismatches = _get_grid_mismatches(sitk_img, mask_img)
+    if len(grid_mismatches)>0:
+        warning_str="""
+        Warning: The image grid of the input image does not match the brain mask (input vs brain mask):
+"""+"\n".join(grid_mismatches)+"\n"
 
         if resample_to_brain_mask:
             warning_str+="""
-        The image is resampled with the assumption that it occupies 
-        the same space as the brain mask.
+        The image is resampled onto the brain mask grid, with the assumption that
+        both images are already aligned in physical space.
         """
             if verbose:
                 print(warning_str)
-            if input_is_mask:
+            if data_type in ['mask', 'labels']:
                 from rabies.utils import antsApplyTransforms
                 import tempfile, shutil
+                # antsApplyTransforms reads its inputs from files
                 tmppath = tempfile.mkdtemp()
+                input_file = f"{tmppath}/input.nii.gz"
+                ref_file = f"{tmppath}/brain_mask.nii.gz"
                 out_file = f"{tmppath}/resampled_mask.nii.gz"
-                antsApplyTransforms(transforms = [], inverses = [], 
-                    input_image = str(img_file), ref_image = str(brain_mask_file), output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
+                sitk.WriteImage(sitk_img, input_file)
+                sitk.WriteImage(mask_img, ref_file)
+                antsApplyTransforms(transforms = [], inverses = [],
+                    input_image = input_file, ref_image = ref_file, output_filename = out_file, interpolation='GenericLabel', rabies_data_type=sitk.sitkInt16, clip_negative=False)
                 sitk_img = sitk.ReadImage(out_file, sitk.sitkInt16)
                 shutil.rmtree(tmppath)
             else:
                 from rabies.utils import resample_volumes
-                sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[], 
+                sitk_img = resample_volumes(in_img=sitk_img, in_ref=mask_img, transforms_3d_files=[], inverses_3d=[],
                                                         motcorr_params_file=None, interpolation=sitk.sitkLinear, rabies_data_type=sitk.sitkFloat32, clip_negative=False)
         else:
             raise ValueError(warning_str)
 
-    dim = sitk_img.GetDimension()
     if dim==4:
         img_array = sitk.GetArrayFromImage(sitk_img)[:,volume_idx]
-    elif dim==3:
+    else:
         img_array = sitk.GetArrayFromImage(sitk_img)[volume_idx]
+
+    if data_type == 'mask':
+        img_array = img_array.astype(bool)
+        if not img_array.any():
+            raise ValueError("The input mask has no voxels within the brain mask.")
+    elif data_type == 'labels':
+        img_array = img_array.astype(int)
+        if not img_array.any():
+            raise ValueError("The input labels have no labelled voxels within the brain mask.")
+    else:
+        if not np.issubdtype(img_array.dtype, np.floating): # keep the float precision of the input, e.g. float32 timeseries
+            img_array = img_array.astype(float)
+        if verbose and not np.isfinite(img_array).all():
+            print(f"Warning: the input image contains {(~np.isfinite(img_array)).sum()} NaN or infinite values within the brain mask.")
     return img_array
 
 
+def _get_grid_mismatches(sitk_img, mask_img):
+    """Compare the 3D image grid (size, spacing, origin and orientation) of an image with the brain mask.
+
+    Returns a list of strings describing each mismatch, which is empty if the grids match.
+    Small differences, e.g. from the float precision of Nifti headers, are tolerated.
+    """
+    dim = sitk_img.GetDimension()
+    input_direction = np.array(sitk_img.GetDirection()).reshape(dim, dim)[:3,:3] # only keep the 3 spatial axes
+    mask_direction = np.array(mask_img.GetDirection()).reshape(3, 3)
+    mask_spacing = np.array(mask_img.GetSpacing())
+
+    mismatches = []
+    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
+        mismatches.append(f"        size: {sitk_img.GetSize()[:3]} vs {mask_img.GetSize()}")
+    if not np.allclose(sitk_img.GetSpacing()[:3], mask_spacing, rtol=1e-4, atol=0):
+        mismatches.append(f"        spacing: {sitk_img.GetSpacing()[:3]} vs {mask_img.GetSpacing()}")
+    # the origin can differ by a small fraction of a voxel
+    if not np.allclose(sitk_img.GetOrigin()[:3], mask_img.GetOrigin(), rtol=0, atol=1e-3*mask_spacing.min()):
+        mismatches.append(f"        origin: {sitk_img.GetOrigin()[:3]} vs {mask_img.GetOrigin()}")
+    if not np.allclose(input_direction, mask_direction, rtol=0, atol=1e-4):
+        mismatches.append(f"        orientation: {input_direction.flatten().tolist()} vs {mask_direction.flatten().tolist()}")
+    return mismatches
+
+
+def _read_sitk_image(img):
+    """Return a SimpleITK image from a Nifti file path, a SimpleITK image or a nibabel image."""
+    if isinstance(img, sitk.Image):
+        return img
+    if isinstance(img, (str, os.PathLike)):
+        if not Path(img).is_file():
+            raise FileNotFoundError(f"The input file {img} does not exist.")
+        return sitk.ReadImage(Path(img))
+
+    import nibabel as nib
+    if isinstance(img, nib.Nifti1Image): # also includes nib.Nifti2Image
+        import tempfile, shutil
+        # convert through a file, so that the image header is read exactly as for a file input
+        tmppath = tempfile.mkdtemp()
+        tmp_file = f"{tmppath}/img.nii.gz"
+        nib.save(img, tmp_file)
+        sitk_img = sitk.ReadImage(tmp_file)
+        shutil.rmtree(tmppath)
+        return sitk_img
+
+    raise TypeError(f"Unsupported image type: {type(img).__name__}. "
+                    "Expected a Nifti file path, a SimpleITK image or a nibabel image.")
+
+
 def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
-    """Recover an image from an array of brain voxels, i.e. the inverse of :func:`load_img_to_array`.
+    """Recover an image from an array of brain voxels, i.e. the inverse of :func:`load_img_to_masked_array`.
 
     A 1D input array is converted into a 3D volume, and a 2D input array (time by voxel) is
     converted into a 4D image. Each voxel value is placed back at its location within the brain
@@ -104,7 +201,7 @@ def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
     img_array : numpy.ndarray
         The input array, either 1D of shape (n_voxels,) for a 3D volume, or 2D of shape
         (n_timepoints, n_voxels) for a 4D image. The voxel indices must match the brain voxels
-        of ``brain_mask_file``, as for arrays loaded with :func:`load_img_to_array`.
+        of ``brain_mask_file``, as for arrays loaded with :func:`load_img_to_masked_array`.
 
     brain_mask_file : str or pathlib.Path
         Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
@@ -259,8 +356,7 @@ def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
 
     # Single NIfTI path → multi-label
     if isinstance(parcellation, (str, os.PathLike)):
-        arr = load_img_to_array(parcellation, brain_mask_file, input_is_mask=True)
-        _check_integer_labels(arr)
+        arr = load_img_to_masked_array(parcellation, brain_mask_file, data_type='labels') # integer labels are checked when loading
         unique_labels = np.unique(arr[arr != 0]).astype(int)
         return _apply_ids(unique_labels.tolist(), [arr == l for l in unique_labels])
 
@@ -278,10 +374,8 @@ def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
 
         if isinstance(parcellation[0], (str, os.PathLike)):
             masks = []
-            for i, p in enumerate(parcellation):
-                arr = load_img_to_array(p, brain_mask_file, input_is_mask=True)
-                _check_binary_mask(arr, idx=i)
-                masks.append(arr.astype(bool))
+            for p in parcellation:
+                masks.append(load_img_to_masked_array(p, brain_mask_file, data_type='mask')) # binary values are checked when loading
             return _apply_ids(list(range(1, len(masks) + 1)), masks)
 
         if isinstance(parcellation[0], np.ndarray):

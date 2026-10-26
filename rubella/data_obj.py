@@ -3,7 +3,7 @@ import pathlib
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from .utils import load_img_to_array
+from .utils import load_img_to_masked_array
 
 class DataObject:
     """Group-level container of timeseries images in a common 2D time-by-voxel format.
@@ -64,7 +64,7 @@ class DataObject:
     volume_coords : numpy.ndarray
         A 3D array with the same shape as the brain mask array, where voxels outside the brain
         mask are NaN, and each voxel inside the mask is providing the index value for where 
-        this voxel can be accessed inside the arrays loaded with :func:`rubella.utils.load_img_to_array` 
+        this voxel can be accessed inside the arrays loaded with :func:`rubella.utils.load_img_to_masked_array` 
         (e.g. the columns of each timeseries in :attr:`timeseries_dict`).
 
     img_id_list : list of str
@@ -156,8 +156,8 @@ class DataObject:
             if verbose:
                 print(file)
 
-            timeseries_dict[img_id] = self._load_img_to_array(
-                file, input_is_mask=False, resample_to_brain_mask=False)
+            timeseries_dict[img_id] = self._load_img_to_masked_array(
+                file, data_type='continuous', resample_to_brain_mask=False)
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
@@ -244,33 +244,34 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def _load_img_to_array(self, img_file, input_is_mask=False, resample_to_brain_mask=True, verbose=True):
-        """Load an input Nifti image to the 2D array format of the DataObject.
+    def _load_img_to_masked_array(self, input_img, data_type, resample_to_brain_mask=True, verbose=True):
+        """Load an input image to the array format of the DataObject.
 
-        Wrapper for :func:`rubella.utils.load_img_to_array`, using the DataObject's
+        Wrapper for :func:`rubella.utils.load_img_to_masked_array`, using the DataObject's
         ``brain_mask_file``. See that function for more details.
 
         Parameters
         ----------
-        img_file : str or pathlib.Path
-            Path to the input Nifti file.
+        input_img : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+            The input image, either as the path to a Nifti file or a pre-loaded image.
 
-        input_is_mask : bool, default=False
-            Whether the input ``img_file`` is itself a brain mask or parcellation, in which case
-            the resampling is carried using the antsApplyTransforms GenericLabel interpolator.
+        data_type : str
+            The type of data contained in ``input_img``, among ``'mask'``, ``'labels'`` or
+            ``'continuous'``.
 
         resample_to_brain_mask : bool, default=True
-            If True, and the input image array size does not match the array size of the ``brain_mask_file``,
-            the input image is resampled onto the image grid of the brain mask so the data can be loaded
-            in a commonspace. If False, any mismatch throws an error.
-            
+            If True, and the input image grid (array size, spacing, origin or orientation) does not
+            match ``brain_mask_file``, the input image is resampled onto the image grid of the brain
+            mask so the data can be loaded in a commonspace. If False, any mismatch throws an error.
+
         verbose : bool, default=True
-            Whether to print the warning when resampling the input.
-            
+            Whether to print warnings, i.e. when resampling the input, or if continuous data contain
+            NaN or infinite values.
+
         Returns
         -------
         img_array : numpy.ndarray
             The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
         """
-        return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask, 
-                                 resample_to_brain_mask=resample_to_brain_mask, verbose=verbose)
+        return load_img_to_masked_array(input_img, self.brain_mask_file, data_type=data_type,
+                                        resample_to_brain_mask=resample_to_brain_mask, verbose=verbose)

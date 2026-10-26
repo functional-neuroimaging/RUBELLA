@@ -53,8 +53,8 @@ def test_assign_group(data_obj):
     assert data_obj.grouping == dict(zip(IMG_IDS, GROUPS))
 
 
-def test_load_img_to_array(data_obj, fake_dataset):
+def test_load_img_to_masked_array(data_obj, fake_dataset):
     # a 3D image gives a 1D array of brain voxels
-    mask_array = data_obj._load_img_to_array(fake_dataset['brain_mask_file'], input_is_mask=True)
+    mask_array = data_obj._load_img_to_masked_array(fake_dataset['brain_mask_file'], data_type='mask')
     assert mask_array.shape == (fake_dataset['num_voxels'],)
     assert np.all(mask_array == 1)

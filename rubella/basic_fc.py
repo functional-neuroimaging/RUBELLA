@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
 from pathlib import Path
-from .utils import _vcorrcoef, _parse_parcellation, load_img_to_array
+from .utils import _vcorrcoef, _parse_parcellation, load_img_to_masked_array
 
 def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_corr=False):
     """Compute seed-based connectivity for one input seed, for each image ID within a timeseries_dict.
@@ -113,7 +113,7 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
             raise ValueError("The input IC_maps array does not have the expected number of voxels in volume_idx.")
         ICs_arr = IC_maps
     elif Path(IC_maps).is_file():
-        ICs_arr = load_img_to_array(IC_maps, brain_mask_file, input_is_mask=False)
+        ICs_arr = load_img_to_masked_array(IC_maps, brain_mask_file, data_type='continuous')
     else:
         raise ValueError("IC_maps is neither an array nor a file.")
 
