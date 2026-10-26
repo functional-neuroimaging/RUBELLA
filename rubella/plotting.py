@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import nilearn.plotting # this is imported so that 'cold_hot' colormap is available
 from rabies.visualization import otsu_scaling
 from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
-from rabies.utils import recover_3D
+from .utils import get_img_from_array
 import SimpleITK as sitk
 import numpy as np
 
@@ -92,7 +92,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
     """
 
     # prepare slices to plot and load data image
-    sitk_img = recover_3D(brain_mask_file, data)
+    sitk_img = get_img_from_array(data, brain_mask_file, image_type='SITK')
     selected_slices = select_slices_for_plotting(slice_selection, brain_mask_file, plane)
     print(f'Plotting along slices: {selected_slices}')
 
@@ -109,7 +109,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
     if isinstance(alpha, np.ndarray):
         if alpha.shape==data.shape:
             weighted_alpha = True
-            alpha_img = recover_3D(brain_mask_file, alpha)
+            alpha_img = get_img_from_array(alpha, brain_mask_file, image_type='SITK')
             alpha,bbox_physical_dimensions = gen_slices_array(alpha_img,selected_slices,slices_per_row,threshold=None, plane=plane)
         else:
             raise ValueError("alpha array must match the shape of the data array shape.")
@@ -120,7 +120,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
     if percent_thresholding:
         threshold = threshold_top_percent(data, top_percent=top_percent)
         mask=np.abs(data)>=threshold # taking absolute values to include negative weights
-        threshold_mask_img = recover_3D(brain_mask_file,mask)
+        threshold_mask_img = get_img_from_array(mask.astype(float), brain_mask_file, image_type='SITK')
         sitk_img = sitk_img*threshold_mask_img
 
     # generate the array of slices to display and bbox dimensions to generate the figure
