@@ -111,10 +111,11 @@ def plot_brain(data,brain_mask_file,template_file=None,
             weighted_alpha = True
             alpha_img = get_img_from_array(alpha, brain_mask_file, image_type='SITK')
             alpha,bbox_physical_dimensions = gen_slices_array(alpha_img,selected_slices,slices_per_row,threshold=None, plane=plane)
+            alpha = np.nan_to_num(alpha, nan=0.0) # prevent NaN from crashing the plotting
         else:
             raise ValueError("alpha array must match the shape of the data array shape.")
     elif not isinstance(alpha, float) and not isinstance(alpha, int):
-        raise ValueError("alpha must be a float of numpy array matching the data array shape.")
+        raise ValueError("alpha must be a float or a numpy array matching the data array shape.")
 
     # apply the thresholding to the data before plotting
     if percent_thresholding:
