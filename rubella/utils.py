@@ -185,7 +185,22 @@ def _read_sitk_image(img):
                     "Expected a Nifti file path, a SimpleITK image or a nibabel image.")
 
 
-def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
+def _sitk_to_nibabel(sitk_img):
+    """Return a nibabel image from a SimpleITK image, i.e. the inverse of :func:`_read_sitk_image`."""
+    import nibabel as nib
+    import tempfile, shutil
+    # convert through a file, so that the image header is written exactly as for a SimpleITK output
+    tmppath = tempfile.mkdtemp()
+    tmp_file = f"{tmppath}/img.nii.gz"
+    sitk.WriteImage(sitk_img, tmp_file)
+    tmp_img = nib.load(tmp_file)
+    # load the data in memory before the file is deleted, since nibabel reads data from the file lazily
+    nib_img = nib.Nifti1Image(np.asanyarray(tmp_img.dataobj), tmp_img.affine, tmp_img.header)
+    shutil.rmtree(tmppath)
+    return nib_img
+
+
+def get_img_from_array(img_array, brain_mask, image_type='SITK'):
     """Recover an image from an array of brain voxels, i.e. the inverse of :func:`load_img_to_masked_array`.
 
     A 1D input array is converted into a 3D volume, and a 2D input array (time by voxel) is
@@ -201,10 +216,11 @@ def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
     img_array : numpy.ndarray
         The input array, either 1D of shape (n_voxels,) for a 3D volume, or 2D of shape
         (n_timepoints, n_voxels) for a 4D image. The voxel indices must match the brain voxels
-        of ``brain_mask_file``, as for arrays loaded with :func:`load_img_to_masked_array`.
+        of ``brain_mask``, as for arrays loaded with :func:`load_img_to_masked_array`.
 
-    brain_mask_file : str or pathlib.Path
-        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, which is used to determine brain voxel array indices. Either the path
+        to a Nifti file or a pre-loaded image.
 
     image_type : str, default='SITK'
         The format of the output image, either ``'SITK'`` for a SimpleITK image, or
@@ -236,7 +252,7 @@ def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
     if img_array.dtype == bool:
         img_array = img_array.astype(np.uint8)  # boolean arrays are not supported by image formats
 
-    mask_img = sitk.ReadImage(Path(brain_mask_file))
+    mask_img = _read_sitk_image(brain_mask)
     volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
     num_voxels = volume_idx.sum()
 
@@ -253,11 +269,6 @@ def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
         full_array = np.zeros((img_array.shape[0],) + volume_idx.shape, dtype=img_array.dtype)
         full_array[:, volume_idx] = img_array
 
-    if image_type == 'nibabel':
-        import nibabel as nib
-        # nibabel orders array axes as (x, y, z, time), the reverse of SimpleITK arrays
-        return nib.Nifti1Image(full_array.T, nib.load(Path(brain_mask_file)).affine)
-
     img = sitk.GetImageFromArray(full_array, isVector=False)
     if img_array.ndim == 1:
         img.CopyInformation(mask_img)
@@ -268,6 +279,9 @@ def get_img_from_array(img_array, brain_mask_file, image_type='SITK'):
         direction = np.eye(4)
         direction[:3, :3] = np.array(mask_img.GetDirection()).reshape(3, 3)
         img.SetDirection(direction.flatten())
+
+    if image_type == 'nibabel':
+        return _sitk_to_nibabel(img)
     return img
 
 
@@ -292,7 +306,7 @@ def _vcorrcoef(X, Y):  # return a correlation between each row of X with each ro
     return r
 
 
-def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
+def _parse_parcellation(parcellation, brain_mask, roi_ids=None):
     """Parse a parcellation input into a dictionary of ROI masks.
 
     Parameters
@@ -302,8 +316,9 @@ def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
         binary masks, giving one ROI per mask. Each input can be the path to a Nifti file, a
         pre-loaded image, or a pre-loaded 1D array of shape (n_voxels,).
 
-    brain_mask_file : str or pathlib.Path
-        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, which is used to determine brain voxel array indices. Either the path
+        to a Nifti file or a pre-loaded image.
 
     roi_ids : list, default=None
         Optionally, a list of IDs to use as dictionary keys. Must match the number of ROIs.
@@ -316,11 +331,13 @@ def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
         Dictionary mapping each ROI ID to a 1D boolean array of shape (n_voxels,).
     """
 
+    brain_mask = _read_sitk_image(brain_mask) # read once, instead of for each input
+
     def _load(input_img, data_type):
         # arrays are converted to an image, so that all inputs go through the same checks when loading
         if isinstance(input_img, np.ndarray):
-            input_img = get_img_from_array(input_img, brain_mask_file)
-        return load_img_to_masked_array(input_img, brain_mask_file, data_type=data_type)
+            input_img = get_img_from_array(input_img, brain_mask)
+        return load_img_to_masked_array(input_img, brain_mask, data_type=data_type)
 
     if isinstance(parcellation, list):
         if len(parcellation) == 0:
