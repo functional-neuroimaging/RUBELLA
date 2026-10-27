@@ -16,7 +16,7 @@ def test_seed_based_FC(data_obj, seed_roi, fake_dataset):
 
 
 def test_seed_based_FC_rejects_missing_file(data_obj):
-    with pytest.raises(ValueError):
+    with pytest.raises(FileNotFoundError):
         basic_fc.seed_based_FC(data_obj.timeseries_dict, data_obj.brain_mask_file,
                                data_obj.img_id_list, seed_roi='not_a_file.nii.gz')
 
@@ -75,6 +75,6 @@ def test_get_sliding_windows_with_fc_func(data_obj, seed_roi):
         data_obj.timeseries_dict, data_obj.img_id_list, censoring_mask_dict=data_obj.censoring_mask,
         window_length=10, step_size=5,
         fc_func=basic_fc.seed_based_FC,
-        fc_kwargs={'brain_mask_file': data_obj.brain_mask_file, 'seed_roi': seed_roi})
+        fc_kwargs={'brain_mask': data_obj.brain_mask_file, 'seed_roi': seed_roi})
     first_window_FC = sliding_window_dict['sliding_windows']['sub-002_ses-1'][0]
     assert first_window_FC.shape == seed_roi.shape

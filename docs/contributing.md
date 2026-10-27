@@ -56,7 +56,7 @@ documentation consistent across the package, each function is ideally accompanie
 properly-formated docstring following this example:
 
 ```python
-def my_new_function(timeseries_dict, img_id_list, brain_mask_file, threshold=0.5, verbose=True):
+def my_new_function(timeseries_dict, img_id_list, brain_mask, threshold=0.5, verbose=True):
     """Compute XYZ for each image ID within a timeseries_dict.
 
     A longer description of what the function does, how it does it, and any assumption about
@@ -71,8 +71,9 @@ def my_new_function(timeseries_dict, img_id_list, brain_mask_file, threshold=0.5
     img_id_list : list of str
         List of image IDs that are keys for ``timeseries_dict``.
 
-    brain_mask_file : str or pathlib.Path
-        Full path to the brain mask Nifti file.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image,
+        e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
     threshold : float, default=0.5
         Description of the parameter, and of the effect of its possible values.

@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import nilearn.plotting # this is imported so that 'cold_hot' colormap is available
 from rabies.visualization import otsu_scaling
 from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
-from .utils import get_img_from_array
+from .utils import get_img_from_array, _read_sitk_image
 import SimpleITK as sitk
 import numpy as np
 
-def plot_brain(data,brain_mask_file,template_file=None,
+def plot_brain(data,brain_mask,template_file=None,
                fig=None,ax=None,plot_size_scale=0.1,
                plane='coronal', slice_selection=6, slices_per_row=None, # slice selection
                cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
@@ -20,10 +20,10 @@ def plot_brain(data,brain_mask_file,template_file=None,
     ----------
     data : numpy.ndarray
         The 1D array of shape (n_voxels,) representing the brain map. The array indices must
-        have been previously generated using ``brain_mask_file``.
+        have been previously generated using ``brain_mask``.
 
-    brain_mask_file : str or pathlib.Path
-        Full path to the brain mask Nifti file.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image.
 
     template_file : str or pathlib.Path, default=None
         Full path to the background template image. If None, no background is plotted.
@@ -92,8 +92,9 @@ def plot_brain(data,brain_mask_file,template_file=None,
     """
 
     # prepare slices to plot and load data image
-    sitk_img = get_img_from_array(data, brain_mask_file, image_type='SITK')
-    selected_slices = select_slices_for_plotting(slice_selection, brain_mask_file, plane)
+    brain_mask = _read_sitk_image(brain_mask) # read once, instead of at each use below
+    sitk_img = get_img_from_array(data, brain_mask, image_type='SITK')
+    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane)
     print(f'Plotting along slices: {selected_slices}')
 
     # select vmax at 98th percentile value
@@ -109,7 +110,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
     if isinstance(alpha, np.ndarray):
         if alpha.shape==data.shape:
             weighted_alpha = True
-            alpha_img = get_img_from_array(alpha, brain_mask_file, image_type='SITK')
+            alpha_img = get_img_from_array(alpha, brain_mask, image_type='SITK')
             alpha,bbox_physical_dimensions = gen_slices_array(alpha_img,selected_slices,slices_per_row,threshold=None, plane=plane)
             alpha = np.nan_to_num(alpha, nan=0.0) # prevent NaN from crashing the plotting
         else:
@@ -121,7 +122,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
     if percent_thresholding:
         threshold = threshold_top_percent(data, top_percent=top_percent)
         mask=np.abs(data)>=threshold # taking absolute values to include negative weights
-        threshold_mask_img = get_img_from_array(mask.astype(float), brain_mask_file, image_type='SITK')
+        threshold_mask_img = get_img_from_array(mask.astype(float), brain_mask, image_type='SITK')
         sitk_img = sitk_img*threshold_mask_img
 
     # generate the array of slices to display and bbox dimensions to generate the figure
@@ -169,7 +170,7 @@ def plot_brain(data,brain_mask_file,template_file=None,
 
 
 def plot_many_brains(
-        data_list,brain_mask_file,template_file=None,
+        data_list,brain_mask,template_file=None,
         fig=None,ax_list=None,plot_size_scale=0.1,num_brain_per_row=1,
         plane='coronal', slice_selection=6, slices_per_row=None, # slice selection
         cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
@@ -211,15 +212,15 @@ def plot_many_brains(
         The colorbar of each plot, as returned by :func:`plot_brain`.
     """
 
-    selected_slices = select_slices_for_plotting(slice_selection, brain_mask_file, plane)
+    brain_mask = _read_sitk_image(brain_mask) # read once, instead of for each plot
+    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane)
     print(f'Plotting along slices: {selected_slices}')
 
     num_plots = len(data_list)
     if not fig and not ax_list: # automatically generate the plot if none is provided
 
         # estimate the bounding box dimension for a single plot using the brain mask
-        mask_img = sitk.ReadImage(brain_mask_file)
-        slices,bbox_physical_dimensions = gen_slices_array(mask_img,selected_slices,slices_per_row,threshold=None, plane=plane)
+        slices,bbox_physical_dimensions = gen_slices_array(brain_mask,selected_slices,slices_per_row,threshold=None, plane=plane)
 
         import math
         num_rows = math.ceil(num_plots/num_brain_per_row)
@@ -242,7 +243,7 @@ def plot_many_brains(
 
     cbar_list = []
     for data,ax in zip(data_list,ax_list):
-        fig,ax,cbar = plot_brain(data,brain_mask_file,template_file,
+        fig,ax,cbar = plot_brain(data,brain_mask,template_file,
                     fig=fig,ax=ax,plot_size_scale=plot_size_scale,
                     plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row,
                     cmap=cmap, vmax=vmax, vmin=vmin, alpha=alpha, plot_cbar=plot_cbar,
@@ -253,7 +254,7 @@ def plot_many_brains(
     return fig,ax_list,cbar_list
 
 
-def select_slices_for_plotting(slice_selection, brain_mask_file, plane):
+def select_slices_for_plotting(slice_selection, brain_mask, plane):
     """Select the slice indices to plot along one of the three cardinal planes.
 
     Parameters
@@ -263,8 +264,8 @@ def select_slices_for_plotting(slice_selection, brain_mask_file, plane):
         that number of slices is selected at evenly spaced intervals across the slices
         containing brain voxels. If ``'all'``, all slices containing brain voxels are selected.
 
-    brain_mask_file : str or pathlib.Path
-        Full path to the brain mask Nifti file.
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image.
 
     plane : str
         The image plane among ``'sagittal'``, ``'coronal'``, or ``'horizontal'``.
@@ -290,7 +291,7 @@ def select_slices_for_plotting(slice_selection, brain_mask_file, plane):
             slicing[slicing_ax] = idx
             return mask_arr[tuple(slicing)]
 
-        mask_arr = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file))
+        mask_arr = sitk.GetArrayFromImage(_read_sitk_image(brain_mask))
         # axes are in numpy (z,y,x) order, matching the indexing in gen_slices_array
         if plane=='sagittal':
             slicing_ax = 2

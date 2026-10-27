@@ -5,10 +5,9 @@ FUNCTIONS FOR DERIVING BASIC FUNCTIONAL CONNECTIVITY MEASURES
 import SimpleITK as sitk
 import numpy as np
 from rabies.analysis_pkg.analysis_math import dual_regression
-from pathlib import Path
-from .utils import _vcorrcoef, _parse_parcellation, load_img_to_masked_array
+from .utils import _vcorrcoef, _parse_parcellation, _read_sitk_image, load_img_to_masked_array
 
-def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_corr=False):
+def seed_based_FC(timeseries_dict, brain_mask, img_id_list, seed_roi, z_corr=False):
     """Compute seed-based connectivity for one input seed, for each image ID within a timeseries_dict.
 
     Parameters
@@ -17,17 +16,17 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
         Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
         e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str or pathlib.Path
-        The full path to the brain mask Nifti file,
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image,
         e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
     img_id_list : list of str
         List of image IDs that are keys for ``timeseries_dict``,
         e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    seed_roi : str, pathlib.Path or numpy.ndarray
-        The input seed region of interest. Must be a brain mask delineating the voxels part of
-        the seed region. Can be either the full path to a Nifti file,
+    seed_roi : str, pathlib.Path, SimpleITK.Image, nibabel.Nifti1Image or numpy.ndarray
+        The input seed region of interest. Must be a binary mask delineating the voxels part of
+        the seed region. Can be either the full path to a Nifti file, a pre-loaded image,
         or a pre-loaded 1D array of shape (n_voxels,).
 
     z_corr : bool, default=False
@@ -39,11 +38,7 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
         Dictionary with ``img_id_list`` as keys, and each entry is the associated connectivity map.
     """
 
-    brain_mask_file = Path(brain_mask_file)
-    if isinstance(seed_roi, np.ndarray) or (not isinstance(seed_roi, np.ndarray) and Path(seed_roi).is_file()):
-        seed_roi_arr = _parse_parcellation([seed_roi], brain_mask_file, roi_ids=None)[1]
-    else:
-        raise ValueError("seed_roi is neither an array nor a file.")
+    seed_roi_arr = _parse_parcellation([seed_roi], brain_mask, roi_ids=None)[1]
 
     SBC_dict = {}
     for img_id in img_id_list:
@@ -58,7 +53,7 @@ def seed_based_FC(timeseries_dict, brain_mask_file, img_id_list, seed_roi, z_cor
     return SBC_dict
     
 
-def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_maps, IC_idx=None, z_corr=False):
+def compute_dual_regression(timeseries_dict, brain_mask, img_id_list, IC_maps, IC_idx=None, z_corr=False):
     """Compute dual regression outputs for each image ID within a timeseries_dict.
 
     Parameters
@@ -67,16 +62,16 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
         Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
         e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str or pathlib.Path
-        The full path to the brain mask Nifti file,
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image,
         e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
     img_id_list : list of str
         List of image IDs that are keys for ``timeseries_dict``,
         e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    IC_maps : str, pathlib.Path or numpy.ndarray
-        The input ICA maps, can be either the full path to a Nifti file,
+    IC_maps : str, pathlib.Path, SimpleITK.Image, nibabel.Nifti1Image or numpy.ndarray
+        The input ICA maps, can be either the full path to a 4D Nifti file, a pre-loaded 4D image,
         or a pre-loaded array of shape (n_ICs, n_voxels).
 
     IC_idx : list of int, default=None
@@ -105,17 +100,13 @@ def compute_dual_regression(timeseries_dict, brain_mask_file, img_id_list, IC_ma
             all DR component timecourses. The diagonal is NaN.
     """
 
-    brain_mask_file = Path(brain_mask_file)
-    volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
-
     if isinstance(IC_maps, np.ndarray): # can take in a pre-loaded array as input
+        volume_idx = sitk.GetArrayFromImage(_read_sitk_image(brain_mask)).astype(bool)
         if not volume_idx.sum()==IC_maps.shape[1]:
             raise ValueError("The input IC_maps array does not have the expected number of voxels in volume_idx.")
         ICs_arr = IC_maps
-    elif Path(IC_maps).is_file():
-        ICs_arr = load_img_to_masked_array(IC_maps, brain_mask_file, data_type='continuous')
     else:
-        raise ValueError("IC_maps is neither an array nor a file.")
+        ICs_arr = load_img_to_masked_array(IC_maps, brain_mask, data_type='continuous')
 
     if not IC_idx:
         IC_idx = list(range(ICs_arr.shape[0])) # take all ICs
@@ -177,7 +168,7 @@ def compute_global_connectivity(timeseries_dict, img_id_list, verbose=True):
     return GC_dict
 
 
-def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellation, roi_ids=None, z_corr=False, parcellated=False):
+def compute_FC_matrix(timeseries_dict, brain_mask, img_id_list, parcellation, roi_ids=None, z_corr=False, parcellated=False):
     """Compute a parcellated functional connectivity matrix for each image ID within a timeseries_dict.
 
     For each subject, the timeseries of each parcel is obtained by averaging across its constituent
@@ -190,18 +181,19 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
         Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
         e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
 
-    brain_mask_file : str or pathlib.Path
-        The full path to the brain mask Nifti file,
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image,
         e.g. :attr:`rubella.data_obj.DataObject.brain_mask_file`.
 
     img_id_list : list of str
         List of image IDs that are keys for ``timeseries_dict``,
         e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
 
-    parcellation : str, pathlib.Path, numpy.ndarray or list
-        The input parcellation defining the ROIs. Accepted formats are: a path to a multi-label
-        Nifti file, a pre-loaded 1D integer array, a list of single-label Nifti paths, or a list
-        of pre-loaded binary 1D arrays.
+    parcellation : str, pathlib.Path, SimpleITK.Image, nibabel.Nifti1Image, numpy.ndarray or list
+        The input parcellation defining the ROIs. Either a single multi-label input, giving one
+        ROI per unique non-zero integer label, or a list of binary masks, giving one ROI per mask.
+        Each input can be the path to a Nifti file, a pre-loaded image, or a pre-loaded 1D array
+        of shape (n_voxels,).
 
     roi_ids : list, default=None
         Optionally, a list of labels to assign to each parcel. Must match the number of parcels.
@@ -214,7 +206,7 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
     parcellated : bool, default=False
         Whether the input timeseries are already parcellated rather than being voxelwise.
         If ``parcellated=True``, each entry in ``timeseries_dict`` must have shape
-        (n_timepoints, n_ROIs), and ``parcellation``, ``brain_mask_file`` and ``roi_ids`` are not
+        (n_timepoints, n_ROIs), and ``parcellation``, ``brain_mask`` and ``roi_ids`` are not
         used by the function. Moreover, ``'parcel_ids'`` is not an entry in the output dictionary.
 
     Returns
@@ -229,7 +221,7 @@ def compute_FC_matrix(timeseries_dict, brain_mask_file, img_id_list, parcellatio
             The functional connectivity matrix for that subject. The diagonal is NaN.
     """
     if not parcellated:
-        parcels_d = _parse_parcellation(parcellation, brain_mask_file, roi_ids=roi_ids)
+        parcels_d = _parse_parcellation(parcellation, brain_mask, roi_ids=roi_ids)
         parcel_ids = list(parcels_d.keys())
 
     FCM_dict = {}
@@ -305,7 +297,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
         subject's window. If None, raw timeseries windows are returned.
 
     fc_kwargs : dict, default={}
-        Additional keyword arguments forwarded to ``fc_func`` (e.g. ``brain_mask_file``,
+        Additional keyword arguments forwarded to ``fc_func`` (e.g. ``brain_mask``,
         ``seed_roi``, ``z_corr``). The ``timeseries_dict`` and ``img_id_list`` arguments are
         injected automatically and should not be included here.
 
@@ -353,7 +345,7 @@ def get_sliding_windows(timeseries_dict, img_id_list, censoring_mask_dict=None, 
     ...     min_censored_window_length=1,
     ...     fc_func=rubella.basic_fc.seed_based_FC,
     ...     fc_kwargs={
-    ...         'brain_mask_file': data_obj.brain_mask_file,
+    ...         'brain_mask': data_obj.brain_mask_file,
     ...         'seed_roi': my_seed_roi,
     ...         'z_corr': True,
     ...     },

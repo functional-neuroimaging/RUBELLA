@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from .. import plotting as plotting
 from rabies.analysis_pkg.analysis_math import elementwise_corrcoef
 from .utils import get_group_stats
+from ..utils import _read_sitk_image
 
 def group_stats_QC_plot(
         FC_map_dict, 
-        brain_mask_file, 
+        brain_mask, 
         template_file,
         slice_selection=6, 
         slices_per_row=None, 
@@ -23,7 +24,8 @@ def group_stats_QC_plot(
     qc_keys = list(qc_data_dict.keys())
     num_maps = len(include_stat)+len(qc_keys)
 
-    selected_slices = plotting.select_slices_for_plotting(slice_selection, brain_mask_file, plane)
+    brain_mask = _read_sitk_image(brain_mask) # read once, instead of for each plot
+    selected_slices = plotting.select_slices_for_plotting(slice_selection, brain_mask, plane)
     n_slices = len(selected_slices)
     if not slices_per_row:
         slices_per_row = n_slices # all slices in 1 row
@@ -38,7 +40,7 @@ def group_stats_QC_plot(
         fixed_threshold = 2 if threshold else None
         vmax=20
         fig,ax,cbar = plotting.plot_brain(
-                tstat_data,brain_mask_file,template_file,
+                tstat_data,brain_mask,template_file,
                 fig=fig,ax=ax,
                 plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=None, plot_cbar=True, # cmap range
@@ -55,7 +57,7 @@ def group_stats_QC_plot(
         fixed_threshold = vmax*0.1 if threshold else None
 
         fig,ax,cbar = plotting.plot_brain(
-                avg_FC,brain_mask_file,template_file,
+                avg_FC,brain_mask,template_file,
                 fig=fig,ax=ax,
                 plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=None, plot_cbar=True, # cmap range
@@ -69,7 +71,7 @@ def group_stats_QC_plot(
         ax = axes[n]
 
         fig,ax,cbar = plotting.plot_brain(
-                std_FC,brain_mask_file,template_file,
+                std_FC,brain_mask,template_file,
                 fig=fig,ax=ax,
                 plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='inferno', vmax=None, vmin=0, plot_cbar=True, # cmap range
@@ -85,7 +87,7 @@ def group_stats_QC_plot(
         fixed_threshold = 10 if threshold else None
 
         fig,ax,cbar = plotting.plot_brain(
-                percent_overlap,brain_mask_file,template_file,
+                percent_overlap,brain_mask,template_file,
                 fig=fig,ax=ax,
                 plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='viridis', vmax=vmax, vmin=0, plot_cbar=True, # cmap range
@@ -106,7 +108,7 @@ def group_stats_QC_plot(
         fixed_threshold = 0.1 if threshold else None
 
         fig,ax,cbar = plotting.plot_brain(
-                qc_corr_map,brain_mask_file,template_file,
+                qc_corr_map,brain_mask,template_file,
                 fig=fig,ax=ax,
                 plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row, # slice selection
                 cmap='cold_hot', vmax=vmax, vmin=-vmax, plot_cbar=True, # cmap range
