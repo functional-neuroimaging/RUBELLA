@@ -1,10 +1,35 @@
 import matplotlib.pyplot as plt
 import nilearn.plotting # this is imported so that 'cold_hot' colormap is available
-from rabies.visualization import otsu_scaling
-from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
 from .utils import get_img_from_array, _read_sitk_image
 import SimpleITK as sitk
 import numpy as np
+
+# the import of rabies.visualization changes matplotlib settings, so we save current settings before and restore after the import
+import matplotlib as mpl
+# Save only the parameters modified by rabies.visualization
+keys = [
+    "lines.color",
+    "patch.edgecolor",
+    "text.color",
+    "axes.facecolor",
+    "axes.edgecolor",
+    "axes.labelcolor",
+    "xtick.color",
+    "ytick.color",
+    "grid.color",
+    "figure.facecolor",
+    "figure.edgecolor",
+    "savefig.facecolor",
+    "savefig.edgecolor",
+]
+original_rcparams = {key: mpl.rcParams[key] for key in keys}
+
+from rabies.visualization import otsu_scaling
+from rabies.analysis_pkg.diagnosis_pkg.dataset_QC import threshold_top_percent
+
+# Restore only the modified parameters
+mpl.rcParams.update(original_rcparams)
+
 
 def plot_brain(data,brain_mask,template_file=None,
                fig=None,ax=None,plot_size_scale=0.1,
