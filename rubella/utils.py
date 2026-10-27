@@ -223,10 +223,26 @@ def get_img_from_array(img_array, brain_mask, image_type='SITK'):
 
 
 def get_concat_timeseries(timeseries_dict, img_id_list):
-    concat_timeseries = timeseries_dict[img_id_list[0]]
-    for img_id in img_id_list[1:]:
-        concat_timeseries = np.concatenate((concat_timeseries, timeseries_dict[img_id]), axis=0)
-    print(concat_timeseries.shape)
+    """Concatenate the timeseries of multiple image IDs along the time axis.
+
+    Parameters
+    ----------
+    timeseries_dict : dict
+        Dictionary with ``img_id_list`` as keys, and each entry is the associated timeseries array,
+        e.g. :attr:`rubella.data_obj.DataObject.timeseries_dict`.
+
+    img_id_list : list of str
+        List of image IDs to concatenate, in order, e.g. :attr:`rubella.data_obj.DataObject.img_id_list`.
+
+    Returns
+    -------
+    concat_timeseries : numpy.ndarray
+        The concatenated timeseries of shape (n_total_timepoints, n_voxels).
+    """
+    if len(img_id_list) == 0:
+        raise ValueError("img_id_list is empty.")
+    # a single concatenation copies each timeseries once, instead of re-copying the growing array at each step
+    concat_timeseries = np.concatenate([timeseries_dict[img_id] for img_id in img_id_list], axis=0)
     return concat_timeseries
 
 
