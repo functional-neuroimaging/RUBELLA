@@ -293,100 +293,47 @@ def _vcorrcoef(X, Y):  # return a correlation between each row of X with each ro
 
 
 def _parse_parcellation(parcellation, brain_mask_file, roi_ids=None):
-    """
-    Parse parcellation input into a dictionary of {label_id: 1D bool mask}.
-
-    Accepted inputs:
-        - str/Path          : single multi-label NIfTI → one mask per unique label
-        - np.ndarray        : pre-loaded multi-label 1D array (brain voxels only)
-        - list[str/Path]    : one single-label NIfTI per seed
-        - list[np.ndarray]  : one pre-loaded 1D array per seed
+    """Parse a parcellation input into a dictionary of ROI masks.
 
     Parameters
     ----------
-    parcellation    : see above
-    brain_mask_file : path to brain mask NIfTI
-    roi_ids         : optional list of strings to use as dictionary keys.
-                      Must match the number of labels/seeds in parcellation.
+    parcellation : str, pathlib.Path, SimpleITK.Image, nibabel.Nifti1Image, numpy.ndarray or list
+        Either a single multi-label input, giving one ROI per unique non-zero label, or a list of
+        binary masks, giving one ROI per mask. Each input can be the path to a Nifti file, a
+        pre-loaded image, or a pre-loaded 1D array of shape (n_voxels,).
+
+    brain_mask_file : str or pathlib.Path
+        Path to the brain mask Nifti file, which is used to determine brain voxel array indices.
+
+    roi_ids : list, default=None
+        Optionally, a list of IDs to use as dictionary keys. Must match the number of ROIs.
+        If None, the label values are used for a multi-label input, and 1 to n_ROIs for a list
+        of masks.
 
     Returns
     -------
-    parcels : dict mapping label ID (int or str) → 1D bool np.ndarray
-
-    Notes
-    -----
-    Generated with Claude Sonnet 4.6 (Anthropic), claude.ai — May 2026.    
+    parcels : dict
+        Dictionary mapping each ROI ID to a 1D boolean array of shape (n_voxels,).
     """
 
-    brain_mask_file = Path(brain_mask_file)
+    def _load(input_img, data_type):
+        # arrays are converted to an image, so that all inputs go through the same checks when loading
+        if isinstance(input_img, np.ndarray):
+            input_img = get_img_from_array(input_img, brain_mask_file)
+        return load_img_to_masked_array(input_img, brain_mask_file, data_type=data_type)
 
-    def _check_array(arr, idx=""):
-        volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(brain_mask_file)).astype(bool)
-        if volume_idx.sum() != len(arr):
-            raise ValueError(
-                f"Array{f' at index {idx}' if idx != '' else ''} length {len(arr)} "
-                f"does not match brain mask voxel count {volume_idx.sum()}."
-            )
-
-    def _check_integer_labels(arr):
-        unique_vals = np.unique(arr)
-        float_vals = unique_vals[unique_vals != np.floor(unique_vals)]
-        if len(float_vals) > 0:
-            raise ValueError(
-                f"Parcellation array contains non-integer label values: {float_vals.tolist()}"
-            )
-
-    def _check_binary_mask(arr, idx=""):
-        unique_vals = np.unique(arr)
-        if not np.all(np.isin(unique_vals, [0, 1])):
-            unexpected = unique_vals[~np.isin(unique_vals, [0, 1])]
-            raise ValueError(
-                f"Seed mask{f' at index {idx}' if idx != '' else ''} is not binary. "
-                f"Unexpected values: {unexpected.tolist()}"
-            )
-
-    def _apply_ids(labels, masks):
-        if roi_ids is not None:
-            if len(roi_ids) != len(labels):
-                raise ValueError(
-                    f"roi_ids has {len(roi_ids)} entries but parcellation has {len(labels)} labels."
-                )
-            labels = roi_ids
-        return dict(zip(labels, masks))
-
-    # Single NIfTI path → multi-label
-    if isinstance(parcellation, (str, os.PathLike)):
-        arr = load_img_to_masked_array(parcellation, brain_mask_file, data_type='labels') # integer labels are checked when loading
-        unique_labels = np.unique(arr[arr != 0]).astype(int)
-        return _apply_ids(unique_labels.tolist(), [arr == l for l in unique_labels])
-
-    # Pre-loaded array → multi-label
-    if isinstance(parcellation, np.ndarray):
-        _check_array(parcellation)
-        _check_integer_labels(parcellation)
-        unique_labels = np.unique(parcellation[parcellation != 0]).astype(int)
-        return _apply_ids(unique_labels.tolist(), [parcellation == l for l in unique_labels])
-
-    # List inputs
     if isinstance(parcellation, list):
         if len(parcellation) == 0:
             raise ValueError("Parcellation list is empty.")
+        masks = [_load(p, 'mask') for p in parcellation]
+        labels = list(range(1, len(masks) + 1))
+    else:
+        arr = _load(parcellation, 'labels')
+        labels = np.unique(arr[arr != 0]).tolist()
+        masks = [arr == l for l in labels]
 
-        if isinstance(parcellation[0], (str, os.PathLike)):
-            masks = []
-            for p in parcellation:
-                masks.append(load_img_to_masked_array(p, brain_mask_file, data_type='mask')) # binary values are checked when loading
-            return _apply_ids(list(range(1, len(masks) + 1)), masks)
-
-        if isinstance(parcellation[0], np.ndarray):
-            masks = []
-            for i, arr in enumerate(parcellation):
-                _check_array(arr, idx=i)
-                _check_binary_mask(arr, idx=i)
-                masks.append(arr.astype(bool))
-            return _apply_ids(list(range(1, len(masks) + 1)), masks)
-
-    raise TypeError(
-        f"Unsupported parcellation type: {type(parcellation).__name__}. "
-        "Expected a NIfTI path, np.ndarray, or list of either."
-    )
+    if roi_ids is not None:
+        if len(roi_ids) != len(labels):
+            raise ValueError(f"roi_ids has {len(roi_ids)} entries but parcellation has {len(labels)} ROIs.")
+        labels = roi_ids
+    return dict(zip(labels, masks))
