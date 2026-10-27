@@ -137,69 +137,6 @@ def load_img_to_masked_array(input_img, brain_mask, data_type, resample_to_brain
     return img_array
 
 
-def _get_grid_mismatches(sitk_img, mask_img):
-    """Compare the 3D image grid (size, spacing, origin and orientation) of an image with the brain mask.
-
-    Returns a list of strings describing each mismatch, which is empty if the grids match.
-    Small differences, e.g. from the float precision of Nifti headers, are tolerated.
-    """
-    dim = sitk_img.GetDimension()
-    input_direction = np.array(sitk_img.GetDirection()).reshape(dim, dim)[:3,:3] # only keep the 3 spatial axes
-    mask_direction = np.array(mask_img.GetDirection()).reshape(3, 3)
-    mask_spacing = np.array(mask_img.GetSpacing())
-
-    mismatches = []
-    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
-        mismatches.append(f"        size: {sitk_img.GetSize()[:3]} vs {mask_img.GetSize()}")
-    if not np.allclose(sitk_img.GetSpacing()[:3], mask_spacing, rtol=1e-4, atol=0):
-        mismatches.append(f"        spacing: {sitk_img.GetSpacing()[:3]} vs {mask_img.GetSpacing()}")
-    # the origin can differ by a small fraction of a voxel
-    if not np.allclose(sitk_img.GetOrigin()[:3], mask_img.GetOrigin(), rtol=0, atol=1e-3*mask_spacing.min()):
-        mismatches.append(f"        origin: {sitk_img.GetOrigin()[:3]} vs {mask_img.GetOrigin()}")
-    if not np.allclose(input_direction, mask_direction, rtol=0, atol=1e-4):
-        mismatches.append(f"        orientation: {input_direction.flatten().tolist()} vs {mask_direction.flatten().tolist()}")
-    return mismatches
-
-
-def _read_sitk_image(img):
-    """Return a SimpleITK image from a Nifti file path, a SimpleITK image or a nibabel image."""
-    if isinstance(img, sitk.Image):
-        return img
-    if isinstance(img, (str, os.PathLike)):
-        if not Path(img).is_file():
-            raise FileNotFoundError(f"The input file {img} does not exist.")
-        return sitk.ReadImage(Path(img))
-
-    import nibabel as nib
-    if isinstance(img, nib.Nifti1Image): # also includes nib.Nifti2Image
-        import tempfile, shutil
-        # convert through a file, so that the image header is read exactly as for a file input
-        tmppath = tempfile.mkdtemp()
-        tmp_file = f"{tmppath}/img.nii.gz"
-        nib.save(img, tmp_file)
-        sitk_img = sitk.ReadImage(tmp_file)
-        shutil.rmtree(tmppath)
-        return sitk_img
-
-    raise TypeError(f"Unsupported image type: {type(img).__name__}. "
-                    "Expected a Nifti file path, a SimpleITK image or a nibabel image.")
-
-
-def _sitk_to_nibabel(sitk_img):
-    """Return a nibabel image from a SimpleITK image, i.e. the inverse of :func:`_read_sitk_image`."""
-    import nibabel as nib
-    import tempfile, shutil
-    # convert through a file, so that the image header is written exactly as for a SimpleITK output
-    tmppath = tempfile.mkdtemp()
-    tmp_file = f"{tmppath}/img.nii.gz"
-    sitk.WriteImage(sitk_img, tmp_file)
-    tmp_img = nib.load(tmp_file)
-    # load the data in memory before the file is deleted, since nibabel reads data from the file lazily
-    nib_img = nib.Nifti1Image(np.asanyarray(tmp_img.dataobj), tmp_img.affine, tmp_img.header)
-    shutil.rmtree(tmppath)
-    return nib_img
-
-
 def get_img_from_array(img_array, brain_mask, image_type='SITK'):
     """Recover an image from an array of brain voxels, i.e. the inverse of :func:`load_img_to_masked_array`.
 
@@ -304,6 +241,69 @@ def _vcorrcoef(X, Y):  # return a correlation between each row of X with each ro
     r_den = np.sqrt(np.sum((X-Xm)**2, axis=1).reshape(-1,1)*np.sum((Y-Ym)**2, axis=1).reshape(1,-1))
     r = r_num/r_den
     return r
+
+
+def _get_grid_mismatches(sitk_img, mask_img):
+    """Compare the 3D image grid (size, spacing, origin and orientation) of an image with the brain mask.
+
+    Returns a list of strings describing each mismatch, which is empty if the grids match.
+    Small differences, e.g. from the float precision of Nifti headers, are tolerated.
+    """
+    dim = sitk_img.GetDimension()
+    input_direction = np.array(sitk_img.GetDirection()).reshape(dim, dim)[:3,:3] # only keep the 3 spatial axes
+    mask_direction = np.array(mask_img.GetDirection()).reshape(3, 3)
+    mask_spacing = np.array(mask_img.GetSpacing())
+
+    mismatches = []
+    if not sitk_img.GetSize()[:3]==mask_img.GetSize():
+        mismatches.append(f"        size: {sitk_img.GetSize()[:3]} vs {mask_img.GetSize()}")
+    if not np.allclose(sitk_img.GetSpacing()[:3], mask_spacing, rtol=1e-4, atol=0):
+        mismatches.append(f"        spacing: {sitk_img.GetSpacing()[:3]} vs {mask_img.GetSpacing()}")
+    # the origin can differ by a small fraction of a voxel
+    if not np.allclose(sitk_img.GetOrigin()[:3], mask_img.GetOrigin(), rtol=0, atol=1e-3*mask_spacing.min()):
+        mismatches.append(f"        origin: {sitk_img.GetOrigin()[:3]} vs {mask_img.GetOrigin()}")
+    if not np.allclose(input_direction, mask_direction, rtol=0, atol=1e-4):
+        mismatches.append(f"        orientation: {input_direction.flatten().tolist()} vs {mask_direction.flatten().tolist()}")
+    return mismatches
+
+
+def _read_sitk_image(img):
+    """Return a SimpleITK image from a Nifti file path, a SimpleITK image or a nibabel image."""
+    if isinstance(img, sitk.Image):
+        return img
+    if isinstance(img, (str, os.PathLike)):
+        if not Path(img).is_file():
+            raise FileNotFoundError(f"The input file {img} does not exist.")
+        return sitk.ReadImage(Path(img))
+
+    import nibabel as nib
+    if isinstance(img, nib.Nifti1Image): # also includes nib.Nifti2Image
+        import tempfile, shutil
+        # convert through a file, so that the image header is read exactly as for a file input
+        tmppath = tempfile.mkdtemp()
+        tmp_file = f"{tmppath}/img.nii.gz"
+        nib.save(img, tmp_file)
+        sitk_img = sitk.ReadImage(tmp_file)
+        shutil.rmtree(tmppath)
+        return sitk_img
+
+    raise TypeError(f"Unsupported image type: {type(img).__name__}. "
+                    "Expected a Nifti file path, a SimpleITK image or a nibabel image.")
+
+
+def _sitk_to_nibabel(sitk_img):
+    """Return a nibabel image from a SimpleITK image, i.e. the inverse of :func:`_read_sitk_image`."""
+    import nibabel as nib
+    import tempfile, shutil
+    # convert through a file, so that the image header is written exactly as for a SimpleITK output
+    tmppath = tempfile.mkdtemp()
+    tmp_file = f"{tmppath}/img.nii.gz"
+    sitk.WriteImage(sitk_img, tmp_file)
+    tmp_img = nib.load(tmp_file)
+    # load the data in memory before the file is deleted, since nibabel reads data from the file lazily
+    nib_img = nib.Nifti1Image(np.asanyarray(tmp_img.dataobj), tmp_img.affine, tmp_img.header)
+    shutil.rmtree(tmppath)
+    return nib_img
 
 
 def _parse_parcellation(parcellation, brain_mask, roi_ids=None):
