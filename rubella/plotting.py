@@ -8,7 +8,7 @@ import numpy as np
 
 def plot_brain(data,brain_mask,template_file=None,
                fig=None,ax=None,plot_size_scale=0.1,
-               plane='coronal', slice_selection=6, slices_per_row=None, # slice selection
+               plane='coronal', slice_selection=6, crop_edges=[0,0], slices_per_row=None, # slice selection
                cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
                fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
                ):
@@ -47,6 +47,17 @@ def plot_brain(data,brain_mask,template_file=None,
         intervals across the brain. If ``'all'``, all slices containing brain voxels
         are plotted.
 
+    crop_edges : list of int, default=[0,0]
+        The number of slices to discard at the start and end of the brain mask
+        along the selected axis plane , before making a final selection of slices.
+        You must provide a list of 2 positive integers defining the number of slice
+        to discard at the start (e.g. front of the brain) and then end of the axis.
+        This can be useful to ignore for instance olfactory bulbs and cerebellar
+        regions of the brain mask for plotting, or more generally to narrow the 
+        plotting towards a custom anatomical window.
+        If ``slice_selection`` is a custom list or array of indices, this parameter
+        is ignored.
+        
     slices_per_row : int, default=None
         The number of slices to plot in one row within the plot.
         If None, all slices are plotted in one row.
@@ -94,7 +105,7 @@ def plot_brain(data,brain_mask,template_file=None,
     # prepare slices to plot and load data image
     brain_mask = _read_sitk_image(brain_mask) # read once, instead of at each use below
     sitk_img = get_img_from_array(data, brain_mask, image_type='SITK')
-    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane)
+    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges)
     print(f'Plotting along slices: {selected_slices}')
 
     # select vmax at 98th percentile value
@@ -172,7 +183,7 @@ def plot_brain(data,brain_mask,template_file=None,
 def plot_many_brains(
         data_list,brain_mask,template_file=None,
         fig=None,ax_list=None,plot_size_scale=0.1,num_brain_per_row=1,
-        plane='coronal', slice_selection=6, slices_per_row=None, # slice selection
+        plane='coronal', slice_selection=6, crop_edges=[0,0], slices_per_row=None, # slice selection
         cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
         fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
         ):
@@ -213,7 +224,7 @@ def plot_many_brains(
     """
 
     brain_mask = _read_sitk_image(brain_mask) # read once, instead of for each plot
-    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane)
+    selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges)
     print(f'Plotting along slices: {selected_slices}')
 
     num_plots = len(data_list)
@@ -254,7 +265,7 @@ def plot_many_brains(
     return fig,ax_list,cbar_list
 
 
-def select_slices_for_plotting(slice_selection, brain_mask, plane):
+def select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges=[0,0]):
     """Select the slice indices to plot along one of the three cardinal planes.
 
     Parameters
@@ -269,6 +280,12 @@ def select_slices_for_plotting(slice_selection, brain_mask, plane):
 
     plane : str
         The image plane among ``'sagittal'``, ``'coronal'``, or ``'horizontal'``.
+
+    crop_edges : list of int, default=[0,0]
+        The number of slices to discard at the start and end of the brain mask
+        along the selected axis plane, before making a final selection of slices.
+        If ``slice_selection`` is a custom list or array of indices, this parameter
+        is ignored.
 
     Returns
     -------
@@ -311,6 +328,12 @@ def select_slices_for_plotting(slice_selection, brain_mask, plane):
                     selected_slices.append(idx)
         # flip order to plot from front to back, or top to bottom
         selected_slices = selected_slices[::-1]
+
+        # apply optional cropping to ignore the slices near the edges
+        crop_start, crop_end = crop_edges
+        if crop_start<0 or crop_end<0:
+            raise ValueError(f"crop_edges cannot contain negative values: {crop_edges}")
+        selected_slices = selected_slices[crop_start: -crop_end if crop_end > 0 else None]
 
         if isinstance(slice_selection, str) and slice_selection=='all':
             return selected_slices
