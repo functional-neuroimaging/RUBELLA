@@ -321,11 +321,18 @@ def select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges=[0
 
         num_slices = mask_arr.shape[slicing_ax]
 
-        # create a list of slices that are within the brain mask - all other slices are discarded
-        selected_slices = []
-        for idx in range(num_slices):
-            if get_arr_slice(mask_arr, slicing_ax, idx).any(): # only append index if there is at least 1 masked voxel
-                    selected_slices.append(idx)
+        # create a list of slices that are within the brain mask - discard empty edge slices 
+        selected_slices=list(range(num_slices))
+        idx=0
+        while(not get_arr_slice(mask_arr, slicing_ax, idx).any()): # check if any voxel is non-zero for a slice
+            selected_slices.remove(idx)
+            idx+=1
+
+        idx=num_slices-1
+        while(not get_arr_slice(mask_arr, slicing_ax, idx).any()): # check if any voxel is non-zero for a slice
+            selected_slices.remove(idx)
+            idx-=1
+
         # flip order to plot from front to back, or top to bottom
         selected_slices = selected_slices[::-1]
 
