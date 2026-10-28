@@ -58,6 +58,21 @@ depth: 1
    :undoc-members:
 ```
 
+## `rubella.datasets` - Fetching reference files
+
+```{eval-rst}
+.. currentmodule:: rubella.datasets
+
+.. autosummary::
+   :nosignatures:
+
+   fetch_rabies_templates
+
+.. automodule:: rubella.datasets
+   :members:
+   :undoc-members:
+```
+
 ## `rubella.plotting` - Plotting
 
 ```{eval-rst}
