@@ -17,6 +17,13 @@ def test_plot_brain(fake_dataset):
         assert cbar is not None
 
 
+def test_plot_brain_float32_thresholding(fake_dataset):
+    # float32 maps, e.g. loaded from a float32 Nifti file, must match the dtype of the threshold mask
+    brain_map = np.random.default_rng(seed=0).standard_normal(fake_dataset['num_voxels']).astype(np.float32)
+    plotting.plot_brain(brain_map, fake_dataset['brain_mask_file'], slices_per_row=2,
+                        percent_thresholding=True, top_percent=20)
+
+
 def test_plot_many_brains(fake_dataset):
     brain_maps = list(np.random.default_rng(seed=0).standard_normal((3, fake_dataset['num_voxels'])))
     fig, ax_list, cbar_list = plotting.plot_many_brains(brain_maps, fake_dataset['brain_mask_file'],

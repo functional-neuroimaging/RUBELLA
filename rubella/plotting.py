@@ -158,7 +158,7 @@ def plot_brain(data,brain_mask,template_file=None,
     if percent_thresholding:
         threshold = threshold_top_percent(data, top_percent=top_percent)
         mask=np.abs(data)>=threshold # taking absolute values to include negative weights
-        threshold_mask_img = get_img_from_array(mask.astype(float), brain_mask, image_type='SITK')
+        threshold_mask_img = get_img_from_array(mask.astype(data.dtype), brain_mask, image_type='SITK')
         sitk_img = sitk_img*threshold_mask_img
 
     # generate the array of slices to display and bbox dimensions to generate the figure
