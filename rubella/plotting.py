@@ -36,6 +36,7 @@ def plot_brain(data,brain_mask,template_file=None,
                plane='coronal', slice_selection=6, crop_edges=[0,0], slices_per_row=None, # slice selection
                cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
                fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
+               verbose=True,
                ):
     """Plot a brain map as a series of slices along one of the three cardinal planes.
 
@@ -115,6 +116,9 @@ def plot_brain(data,brain_mask,template_file=None,
     top_percent : float, default=10
         The percentage value for ``percent_thresholding``.
 
+    verbose : bool, default=True
+        Whether to print info about the plot.
+        
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -131,7 +135,8 @@ def plot_brain(data,brain_mask,template_file=None,
     brain_mask = _read_sitk_image(brain_mask) # read once, instead of at each use below
     sitk_img = get_img_from_array(data, brain_mask, image_type='SITK')
     selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges)
-    print(f'Plotting along slices: {selected_slices}')
+    if verbose:
+        print(f'Plotting along slices: {selected_slices}')
 
     # select vmax at 98th percentile value
     vector = data.flatten()
@@ -166,7 +171,8 @@ def plot_brain(data,brain_mask,template_file=None,
     
     if not fig and not ax: # automatically generate the plot if none is provided
         figsize=(bbox_physical_dimensions[0]*plot_size_scale,bbox_physical_dimensions[1]*plot_size_scale)
-        print(f'Generating a figure with dimensions {figsize}')
+        if verbose:
+            print(f'Generating a figure with dimensions {figsize}')
         fig,ax = plt.subplots(1,1, figsize=figsize, constrained_layout=True)
     elif not ax or not fig:
         raise ValueError("""
@@ -211,6 +217,7 @@ def plot_many_brains(
         plane='coronal', slice_selection=6, crop_edges=[0,0], slices_per_row=None, # slice selection
         cmap='cold_hot', vmax=None, vmin=None, alpha=1, plot_cbar=False, # cmap range
         fixed_threshold=None,percent_thresholding=False,top_percent=10, # image thresholding
+        verbose=True,
         ):
     
     """Plot a series of brain maps in one figure, with multiple rows and columns.
@@ -250,7 +257,8 @@ def plot_many_brains(
 
     brain_mask = _read_sitk_image(brain_mask) # read once, instead of for each plot
     selected_slices = select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges)
-    print(f'Plotting along slices: {selected_slices}')
+    if verbose:
+        print(f'Plotting along slices: {selected_slices}')
 
     num_plots = len(data_list)
     if not fig and not ax_list: # automatically generate the plot if none is provided
@@ -262,7 +270,8 @@ def plot_many_brains(
         num_rows = math.ceil(num_plots/num_brain_per_row)
 
         figsize=(num_brain_per_row*bbox_physical_dimensions[0]*plot_size_scale,num_rows*bbox_physical_dimensions[1]*plot_size_scale)
-        print(f'Generating a figure with dimensions {figsize}, {num_rows} rows and {num_brain_per_row} columns.')
+        if verbose:
+            print(f'Generating a figure with dimensions {figsize}, {num_rows} rows and {num_brain_per_row} columns.')
         fig,axes = plt.subplots(num_rows,num_brain_per_row, figsize=figsize, constrained_layout=True)
         ax_list = axes.flatten()
     elif not ax_list or not fig:
@@ -284,6 +293,7 @@ def plot_many_brains(
                     plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row,
                     cmap=cmap, vmax=vmax, vmin=vmin, alpha=alpha, plot_cbar=plot_cbar,
                     fixed_threshold=fixed_threshold,percent_thresholding=percent_thresholding,top_percent=top_percent,
+                    verbose=False,
                     )
         cbar_list.append(cbar)
 
