@@ -73,17 +73,28 @@ def plot_brain(data,brain_mask,template_file=None,
         intervals across the brain. If ``'all'``, all slices containing brain voxels
         are plotted.
 
-    crop_edges : list of int, default=[0,0]
-        The number of slices to discard at the start and end of the brain mask
-        along the selected axis plane , before making a final selection of slices.
-        You must provide a list of 2 positive integers defining the number of slice
-        to discard at the start (e.g. front of the brain) and then end of the axis.
+    crop_edges : list of int or dict, default=[0,0]
+        The number of slices to discard at the edges of the image, which crops
+        the field of view of the plot. If a list of 2 positive integers, slices are
+        discarded along ``plane`` only, at the start (e.g. front of the brain) and
+        then end of the axis, before making a final selection of slices. To crop
+        along any of the three axes, provide a dict with keys among ``'sagittal'``,
+        ``'coronal'`` and ``'horizontal'`` (naming the axis normal to that plane),
+        each with a list of 2 positive integers, e.g.
+        ``{'coronal': [6, 10], 'horizontal': [0, 4]}``. Cropping along the other
+        axes than ``plane`` crops the field of view of each slice.
+        For each axis, the first value crops from the highest array index, and the
+        second from the lowest, which for ``plane`` matches the order in which
+        slices are plotted. Values are counted from the edge of the image grid,
+        regardless of where the brain mask voxels are. Along ``plane``, slices are
+        then selected among the remaining slices containing brain voxels, so
+        cropping which does not reach the brain mask has no effect on slice selection.
         This can be useful to ignore for instance olfactory bulbs and cerebellar
-        regions of the brain mask for plotting, or more generally to narrow the 
+        regions of the brain mask for plotting, or more generally to narrow the
         plotting towards a custom anatomical window.
-        If ``slice_selection`` is a custom list or array of indices, this parameter
-        is ignored.
-        
+        If ``slice_selection`` is a custom list or array of indices, the indices
+        must fall within the cropped window along ``plane``.
+
     slices_per_row : int, default=None
         The number of slices to plot in one row within the plot.
         If None, all slices are plotted in one row.
@@ -138,6 +149,10 @@ def plot_brain(data,brain_mask,template_file=None,
     if verbose:
         print(f'Plotting along slices: {selected_slices}')
 
+    # images are cropped to the field of view, so slice indices are shifted to match the cropped images
+    crop_bbox = compute_crop_bbox(brain_mask, crop_edges, plane)
+    cropped_slices = _shift_slices_to_crop(selected_slices, crop_bbox, plane)
+
     # select vmax at 98th percentile value
     vector = data.flatten()
     vector.sort()
@@ -151,8 +166,8 @@ def plot_brain(data,brain_mask,template_file=None,
     if isinstance(alpha, np.ndarray):
         if alpha.shape==data.shape:
             weighted_alpha = True
-            alpha_img = get_img_from_array(alpha, brain_mask, image_type='SITK')
-            alpha,bbox_physical_dimensions = gen_slices_array(alpha_img,selected_slices,slices_per_row,threshold=None, plane=plane)
+            alpha_img = crop_img(get_img_from_array(alpha, brain_mask, image_type='SITK'), crop_bbox)
+            alpha,_ = gen_slices_array(alpha_img,cropped_slices,slices_per_row,threshold=None, plane=plane)
             alpha = np.nan_to_num(alpha, nan=0.0) # prevent NaN from crashing the plotting
         else:
             raise ValueError("alpha array must match the shape of the data array shape.")
@@ -165,9 +180,10 @@ def plot_brain(data,brain_mask,template_file=None,
         mask=np.abs(data)>=threshold # taking absolute values to include negative weights
         threshold_mask_img = get_img_from_array(mask.astype(data.dtype), brain_mask, image_type='SITK')
         sitk_img = sitk_img*threshold_mask_img
+    sitk_img = crop_img(sitk_img, crop_bbox)
 
     # generate the array of slices to display and bbox dimensions to generate the figure
-    data_slices,bbox_physical_dimensions = gen_slices_array(sitk_img,selected_slices,slices_per_row,threshold=fixed_threshold, plane=plane)
+    data_slices,bbox_physical_dimensions = gen_slices_array(sitk_img,cropped_slices,slices_per_row,threshold=fixed_threshold, plane=plane)
     
     if not fig and not ax: # automatically generate the plot if none is provided
         figsize=(bbox_physical_dimensions[0]*plot_size_scale,bbox_physical_dimensions[1]*plot_size_scale)
@@ -182,10 +198,10 @@ def plot_brain(data,brain_mask,template_file=None,
 
     # plot the template first as background if provided
     if template_file is not None:
-        # resample the template to match the image
+        # resample the template to match the image (this also applies the cropping)
         scaled = otsu_scaling(template_file)
         scaled = sitk.Resample(scaled, sitk_img)
-        slices_background,bbox_physical_dimensions = gen_slices_array(scaled,selected_slices,slices_per_row,threshold=None, plane=plane)
+        slices_background,_ = gen_slices_array(scaled,cropped_slices,slices_per_row,threshold=None, plane=plane)
         pos = ax.imshow(slices_background, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=0,vmax=1,cmap='gray', alpha=1, interpolation='none')
         ax.axis('off')
 
@@ -263,8 +279,10 @@ def plot_many_brains(
     num_plots = len(data_list)
     if not fig and not ax_list: # automatically generate the plot if none is provided
 
-        # estimate the bounding box dimension for a single plot using the brain mask
-        slices,bbox_physical_dimensions = gen_slices_array(brain_mask,selected_slices,slices_per_row,threshold=None, plane=plane)
+        # estimate the bounding box dimension for a single plot using the cropped brain mask
+        crop_bbox = compute_crop_bbox(brain_mask, crop_edges, plane)
+        cropped_slices = _shift_slices_to_crop(selected_slices, crop_bbox, plane)
+        slices,bbox_physical_dimensions = gen_slices_array(crop_img(brain_mask, crop_bbox),cropped_slices,slices_per_row,threshold=None, plane=plane)
 
         import math
         num_rows = math.ceil(num_plots/num_brain_per_row)
@@ -290,7 +308,7 @@ def plot_many_brains(
     for data,ax in zip(data_list,ax_list):
         fig,ax,cbar = plot_brain(data,brain_mask,template_file,
                     fig=fig,ax=ax,plot_size_scale=plot_size_scale,
-                    plane=plane, slice_selection=selected_slices, slices_per_row=slices_per_row,
+                    plane=plane, slice_selection=selected_slices, crop_edges=crop_edges, slices_per_row=slices_per_row,
                     cmap=cmap, vmax=vmax, vmin=vmin, alpha=alpha, plot_cbar=plot_cbar,
                     fixed_threshold=fixed_threshold,percent_thresholding=percent_thresholding,top_percent=top_percent,
                     verbose=False,
@@ -298,6 +316,86 @@ def plot_many_brains(
         cbar_list.append(cbar)
 
     return fig,ax_list,cbar_list
+
+
+# axes are in numpy (z,y,x) order, matching the indexing in gen_slices_array
+_PLANE_TO_NP_AXIS = {'horizontal': 0, 'coronal': 1, 'sagittal': 2}
+
+
+def _parse_crop_edges(crop_edges, plane):
+    # returns a dict of {numpy axis: (crop_start, crop_end)}
+    if not isinstance(crop_edges, dict):
+        crop_edges = {plane: crop_edges}
+    parsed = {}
+    for crop_plane, edges in crop_edges.items():
+        if not crop_plane in _PLANE_TO_NP_AXIS:
+            raise ValueError(f"crop_edges key {crop_plane} is not among 'coronal', 'sagittal' or 'horizontal'.")
+        if not len(edges)==2:
+            raise ValueError(f"crop_edges must provide 2 values per axis, got {edges} for {crop_plane}.")
+        crop_start, crop_end = edges
+        if crop_start<0 or crop_end<0:
+            raise ValueError(f"crop_edges cannot contain negative values: {crop_edges}")
+        parsed[_PLANE_TO_NP_AXIS[crop_plane]] = (int(crop_start), int(crop_end))
+    return parsed
+
+
+def _mask_extent(mask_arr, axis):
+    # returns the [lo, hi) range of indices along axis which contain brain voxels
+    other_axes = tuple(ax for ax in range(mask_arr.ndim) if not ax==axis)
+    nonzero = np.flatnonzero(mask_arr.any(axis=other_axes))
+    return int(nonzero[0]), int(nonzero[-1]+1)
+
+
+def compute_crop_bbox(brain_mask, crop_edges, plane):
+    """Compute the bounding box of the field of view defined by ``crop_edges``.
+
+    Parameters
+    ----------
+    brain_mask : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+        The brain mask, either as the path to a Nifti file or a pre-loaded image.
+        Only its image grid is used.
+
+    crop_edges : list of int or dict
+        The number of slices to discard at the edges of the image, as described
+        in :func:`plot_brain`.
+
+    plane : str
+        The image plane among ``'sagittal'``, ``'coronal'``, or ``'horizontal'``.
+        A list provided for ``crop_edges`` is applied along this axis.
+
+    Returns
+    -------
+    crop_bbox : list of tuple
+        The ``(lo, hi)`` range of array indices kept along each axis, in numpy (z,y,x) order.
+    """
+    shape = _read_sitk_image(brain_mask).GetSize()[::-1] # numpy (z,y,x) order
+    crop = _parse_crop_edges(crop_edges, plane)
+
+    crop_bbox = []
+    for axis in range(3):
+        crop_start, crop_end = crop.get(axis, (0, 0))
+        # crop_start is applied to the highest indices, since slices are plotted in reversed order
+        hi = shape[axis]-crop_start
+        lo = crop_end
+        if lo>=hi:
+            raise ValueError(f"crop_edges={crop_edges} removes all slices along axis {axis} of the image (size {shape[axis]}).")
+        crop_bbox.append((lo, hi))
+    return crop_bbox
+
+
+def crop_img(sitk_img, crop_bbox):
+    """Crop a SimpleITK image to ``crop_bbox`` from :func:`compute_crop_bbox`, preserving its physical space."""
+    (z_lo, z_hi), (y_lo, y_hi), (x_lo, x_hi) = crop_bbox
+    return sitk_img[x_lo:x_hi, y_lo:y_hi, z_lo:z_hi] # SimpleITK indexing is in (x,y,z) order
+
+
+def _shift_slices_to_crop(selected_slices, crop_bbox, plane):
+    # convert slice indices from the uncropped image to the cropped image
+    lo, hi = crop_bbox[_PLANE_TO_NP_AXIS[plane]]
+    cropped_slices = [s-lo for s in selected_slices]
+    if any(s<0 or s>=hi-lo for s in cropped_slices):
+        raise ValueError(f"Slices {selected_slices} fall outside the cropped window (indices {lo} to {hi-1}).")
+    return cropped_slices
 
 
 def select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges=[0,0]):
@@ -316,17 +414,23 @@ def select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges=[0
     plane : str
         The image plane among ``'sagittal'``, ``'coronal'``, or ``'horizontal'``.
 
-    crop_edges : list of int, default=[0,0]
-        The number of slices to discard at the start and end of the brain mask
-        along the selected axis plane, before making a final selection of slices.
-        If ``slice_selection`` is a custom list or array of indices, this parameter
-        is ignored.
+    crop_edges : list of int or dict, default=[0,0]
+        The number of slices to discard at the edges of the image, as described
+        in :func:`plot_brain`. Only the cropping along ``plane`` affects slice selection.
+        If ``slice_selection`` is a custom list or array of indices, the indices must
+        fall within the cropped window along ``plane``.
 
     Returns
     -------
     selected_slices : list of int
-        The array indices of the selected slices along ``plane``.
+        The array indices of the selected slices along ``plane``, in the uncropped image.
     """
+
+    if not plane in _PLANE_TO_NP_AXIS:
+        raise ValueError(f"{plane} is not among 'coronal', 'sagittal' or 'horizontal'.")
+    slicing_ax = _PLANE_TO_NP_AXIS[plane]
+    brain_mask = _read_sitk_image(brain_mask)
+    crop_lo, crop_hi = compute_crop_bbox(brain_mask, crop_edges, plane)[slicing_ax]
 
     if isinstance(slice_selection, (list, tuple, np.ndarray)):
         selected_slices = np.asarray(slice_selection)
@@ -336,46 +440,27 @@ def select_slices_for_plotting(slice_selection, brain_mask, plane, crop_edges=[0
             raise ValueError(f"slice_selection must be filled with integer values when provided as a list/array. Input is {slice_selection}.")
         if (selected_slices<0).any():
             raise ValueError(f"slice_selection must not contain negative indices. Input is {slice_selection}.")
+        # the indices must remain valid once the image is cropped
+        outside = selected_slices[(selected_slices<crop_lo) | (selected_slices>=crop_hi)]
+        if outside.size>0:
+            raise ValueError(f"slice_selection indices {outside.tolist()} fall outside the cropped window along "
+                             f"the {plane} axis (indices {crop_lo} to {crop_hi-1}) defined by crop_edges={crop_edges}.")
         return selected_slices.tolist()
     else:
-        def get_arr_slice(mask_arr, slicing_ax, idx): # takes out the 2D slice along a given axis/slice index value
-            slicing = [slice(None)]*3
-            slicing[slicing_ax] = idx
-            return mask_arr[tuple(slicing)]
-
-        mask_arr = sitk.GetArrayFromImage(_read_sitk_image(brain_mask))
-        # axes are in numpy (z,y,x) order, matching the indexing in gen_slices_array
-        if plane=='sagittal':
-            slicing_ax = 2
-        elif plane=='coronal':
-            slicing_ax = 1
-        elif plane=='horizontal':
-            slicing_ax = 0
-        else:
-            raise ValueError(f"{plane} is not among 'coronal', 'sagittal' or 'horizontal'.")
-
-        num_slices = mask_arr.shape[slicing_ax]
-
-        # create a list of slices that are within the brain mask - discard empty edge slices 
-        selected_slices=list(range(num_slices))
-        idx=0
-        while(not get_arr_slice(mask_arr, slicing_ax, idx).any()): # check if any voxel is non-zero for a slice
-            selected_slices.remove(idx)
-            idx+=1
-
-        idx=num_slices-1
-        while(not get_arr_slice(mask_arr, slicing_ax, idx).any()): # check if any voxel is non-zero for a slice
-            selected_slices.remove(idx)
-            idx-=1
+        # keep the slices that are within the brain mask and the cropped window - discard empty edge slices
+        mask_arr = sitk.GetArrayFromImage(brain_mask)
+        mask_lo, mask_hi = _mask_extent(mask_arr, slicing_ax)
+        crop_start, crop_end = _parse_crop_edges(crop_edges, plane).get(slicing_ax, (0, 0))
+        if (crop_start>0 and crop_hi>=mask_hi) or (crop_end>0 and crop_lo<=mask_lo):
+            print(f"WARNING: crop_edges={crop_edges} does not reach the brain mask along the {plane} axis on at least "
+                  f"one edge (brain voxels span indices {mask_lo} to {mask_hi-1}, out of {mask_arr.shape[slicing_ax]} slices), "
+                  "and has no effect on slice selection at that edge.")
+        selected_slices = list(range(max(mask_lo, crop_lo), min(mask_hi, crop_hi)))
+        if len(selected_slices)==0:
+            raise ValueError(f"crop_edges={crop_edges} removes all slices containing brain voxels along the {plane} axis.")
 
         # flip order to plot from front to back, or top to bottom
         selected_slices = selected_slices[::-1]
-
-        # apply optional cropping to ignore the slices near the edges
-        crop_start, crop_end = crop_edges
-        if crop_start<0 or crop_end<0:
-            raise ValueError(f"crop_edges cannot contain negative values: {crop_edges}")
-        selected_slices = selected_slices[crop_start: -crop_end if crop_end > 0 else None]
 
         if isinstance(slice_selection, str) and slice_selection=='all':
             return selected_slices
