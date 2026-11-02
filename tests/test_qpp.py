@@ -1,5 +1,5 @@
 """Tests for rubella.qpp, using the fake dataset from conftest.py."""
-from rubella.basic import get_sliding_windows
+from rubella.basic_fc import get_sliding_windows
 from rubella.qpp.main import compute_QPP, count_QPP_occurence
 
 

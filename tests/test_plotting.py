@@ -5,7 +5,7 @@ The plots are only checked to run without error, not to look right.
 import numpy as np
 
 from rubella import plotting
-from rubella.basic import seed_based_FC
+from rubella.basic_fc import seed_based_FC
 from rubella.qc import report, utils
 
 
@@ -15,6 +15,13 @@ def test_plot_brain(fake_dataset):
         fig, ax, cbar = plotting.plot_brain(brain_map, fake_dataset['brain_mask_file'], plane=plane,
                                             slices_per_row=2, plot_cbar=True)
         assert cbar is not None
+
+
+def test_plot_brain_float32_thresholding(fake_dataset):
+    # float32 maps, e.g. loaded from a float32 Nifti file, must match the dtype of the threshold mask
+    brain_map = np.random.default_rng(seed=0).standard_normal(fake_dataset['num_voxels']).astype(np.float32)
+    plotting.plot_brain(brain_map, fake_dataset['brain_mask_file'], slices_per_row=2,
+                        percent_thresholding=True, top_percent=20)
 
 
 def test_plot_many_brains(fake_dataset):
@@ -35,5 +42,5 @@ def test_qc_group_stats(data_obj, seed_roi, fake_dataset):
     assert len(dice_list) == len(SBC_dict)
 
     report.group_stats_QC_plot(SBC_dict, data_obj.brain_mask_file, template_file=None,
-                               selected_slices=[1, 2, 3], slices_per_row=3,
+                               slice_selection=[1, 2, 3], slices_per_row=3,
                                qc_data_dict={'fake_motion': [0.1, 0.5, 0.2]})

@@ -1,8 +1,9 @@
 import SimpleITK as sitk
 import pathlib
 from pathlib import Path
+import numpy as np
 import pandas as pd
-from .basic import load_img_to_array
+from .utils import load_img_to_masked_array
 
 class DataObject:
     """Group-level container of timeseries images in a common 2D time-by-voxel format.
@@ -60,9 +61,11 @@ class DataObject:
     brain_mask_file : pathlib.Path
         A copy of the input ``brain_mask_file``.
 
-    volume_idx : numpy.ndarray
-        The brain mask loaded as a boolean numpy array. These are the indices used to load
-        input 3D volumes into a 1D concatenated space format.
+    volume_coords : numpy.ndarray
+        A 3D array with the same shape as the brain mask array, where voxels outside the brain
+        mask are NaN, and each voxel inside the mask is providing the index value for where 
+        this voxel can be accessed inside the arrays loaded with :func:`rubella.utils.load_img_to_masked_array` 
+        (e.g. the columns of each timeseries in :attr:`timeseries_dict`).
 
     img_id_list : list of str
         The image IDs loaded in the DataObject. These are also the keys to access values inside
@@ -81,11 +84,12 @@ class DataObject:
 
     def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
         # the brain mask file defines the voxel commonspace to load each volume
-        brain_mask_file = Path(brain_mask_file)
-        self.brain_mask_file = brain_mask_file
-        mask_img = sitk.ReadImage(brain_mask_file)
-        volume_idx = sitk.GetArrayFromImage(mask_img).astype(bool)
-        self.volume_idx = volume_idx
+        self.brain_mask_file = Path(brain_mask_file)
+
+        # for each brain voxel, its index in the 1D vector format of loaded images; NaN outside the brain
+        volume_idx = sitk.GetArrayFromImage(sitk.ReadImage(self.brain_mask_file)).astype(bool)
+        self.volume_coords = np.full(volume_idx.shape, np.nan)
+        self.volume_coords[volume_idx] = np.arange(volume_idx.sum())
 
         if timeseries_file_list:
             self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
@@ -137,7 +141,6 @@ class DataObject:
             new_list = False
             if not len(img_id_list)==num_imgs:
                 raise ValueError("The input img_id_list does not have the same length as timeseries_file_list.")
-        volume_idx = self.volume_idx
 
         for i in range(num_imgs):
             file = Path(timeseries_file_list[i])
@@ -152,8 +155,9 @@ class DataObject:
                 raise ValueError(f'Duplicate found for {img_id}')
             if verbose:
                 print(file)
-            timeseries = sitk.GetArrayFromImage(sitk.ReadImage(file))[:,volume_idx]
-            timeseries_dict[img_id] = timeseries
+
+            timeseries_dict[img_id] = self._load_img_to_masked_array(
+                file, data_type='continuous', resample_to_brain_mask=False)
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
@@ -240,24 +244,34 @@ class DataObject:
                 print(f'No group was assigned to {img_id}.')
         return self
 
-    def _load_img_to_array(self, img_file, input_is_mask=False):
-        """Load an input Nifti image to the 2D array format of the DataObject.
+    def _load_img_to_masked_array(self, input_img, data_type, resample_to_brain_mask=True, verbose=True):
+        """Load an input image to the array format of the DataObject.
 
-        Wrapper for :func:`rubella.basic.load_img_to_array`, using the DataObject's
+        Wrapper for :func:`rubella.utils.load_img_to_masked_array`, using the DataObject's
         ``brain_mask_file``. See that function for more details.
 
         Parameters
         ----------
-        img_file : str or pathlib.Path
-            Path to the input Nifti file.
+        input_img : str, pathlib.Path, SimpleITK.Image or nibabel.Nifti1Image
+            The input image, either as the path to a Nifti file or a pre-loaded image.
 
-        input_is_mask : bool, default=False
-            Whether the input ``img_file`` is itself a brain mask or parcellation, in which case
-            the resampling is carried using the antsApplyTransforms GenericLabel interpolator.
+        data_type : str
+            The type of data contained in ``input_img``, among ``'mask'``, ``'labels'`` or
+            ``'continuous'``.
+
+        resample_to_brain_mask : bool, default=True
+            If True, and the input image grid (array size, spacing, origin or orientation) does not
+            match ``brain_mask_file``, the input image is resampled onto the image grid of the brain
+            mask so the data can be loaded in a commonspace. If False, any mismatch throws an error.
+
+        verbose : bool, default=True
+            Whether to print warnings, i.e. when resampling the input, or if continuous data contain
+            NaN or infinite values.
 
         Returns
         -------
         img_array : numpy.ndarray
             The output image array, 2D (time by voxel) for a 4D input image, or 1D for a 3D image.
         """
-        return load_img_to_array(img_file,self.brain_mask_file, input_is_mask=input_is_mask)
+        return load_img_to_masked_array(input_img, self.brain_mask_file, data_type=data_type,
+                                        resample_to_brain_mask=resample_to_brain_mask, verbose=verbose)

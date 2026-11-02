@@ -22,14 +22,19 @@ extensions = [
     'sphinx.ext.autosummary', # summary tables of functions/classes in api.md
     'sphinx.ext.napoleon',    # parses numpydoc-style sections (Parameters, Returns, ...)
     'sphinx.ext.viewcode',    # adds [source] links to each documented object
-    'myst_parser',            # only needed if you write pages in Markdown; remove otherwise
+    'myst_nb',                # Markdown pages (via myst_parser) and Jupyter notebooks
 ]
 
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# -- notebooks (myst-nb) -----------------------------------------------------
+# Notebooks are rendered with their saved outputs and never executed, since the
+# docs build has neither the real dependencies nor RABIES data.
+nb_execution_mode = 'off'
+
 # -- autodoc / napoleon ------------------------------------------------------
 # All third-party dependencies are mocked so the docs build in a minimal
-# environment (only sphinx, myst-parser and the theme need to be installed).
+# environment (only the packages in docs/requirements.txt need to be installed).
 autodoc_mock_imports = ['rabies', 'nilearn', 'SimpleITK', 'sklearn', 'scipy', 'seaborn',
                         'numpy', 'pandas', 'matplotlib']
 autodoc_member_order = 'bysource'   # keep the order of the source file

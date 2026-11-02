@@ -88,8 +88,8 @@ class CAPs:
     n_clusters : int
         The number of clusters (CAPs) to identify.
 
-    init : str or np.ndarray, default='k-means++'
-        Method for centroid initialization: 'k-means++', 'random', or a pre-defined np.ndarray
+    init : str or numpy.ndarray, default='k-means++'
+        Method for centroid initialization: 'k-means++', 'random', or a pre-defined numpy.ndarray
         of shape (n_clusters, n_features) providing the initial centroids directly.
 
     distance : str, default='correlation'
@@ -107,7 +107,7 @@ class CAPs:
         cluster between consecutive iterations. A repetition is considered converged once this
         fraction drops to or below tol.
 
-    random_state : int, np.random.RandomState, or None, default=None
+    random_state : int, numpy.random.RandomState, or None, default=None
         Controls the randomness of centroid initialization. Pass an int for reproducible results.
 
     centroid_order : str or None, default='Cmodes'
@@ -116,17 +116,17 @@ class CAPs:
 
     Attributes
     ----------
-    cluster_centers_ : np.ndarray of shape (n_clusters, n_features)
-        The fitted cluster centroids, in the same (possibly normalized) space as `distance` --
+    cluster_centers_ : numpy.ndarray of shape (n_clusters, n_features)
+        The fitted cluster centroids, in the same (possibly normalized) space as ``distance`` --
         see the class description above.
 
-    labels_ : np.ndarray of shape (n_samples,)
+    labels_ : numpy.ndarray of shape (n_samples,)
         Cluster assignment for each sample in the data used to fit the model.
 
     inertia_ : float
         Sum of squared distances of samples to their assigned centroid, for the best repetition.
 
-    cross_rep_sim : np.ndarray or None
+    cross_rep_sim : numpy.ndarray or None
         Similarity of each non-best repetition's centroids to the best repetition's centroids.
         Set only when n_rep > 1. See cross_rep_robustness().
 
@@ -156,7 +156,7 @@ class CAPs:
 
         Parameters
         ----------
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             The data to cluster (e.g. timepoints x voxels).
 
         copy_X : bool, default=False
@@ -233,14 +233,14 @@ class CAPs:
 
         Parameters
         ----------
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             New data to compute distances for. Can be passed in raw (un-normalized) form: for
             'correlation'/'cosine' distance, the underlying distance functions normalize both X
             and the centroids internally, so no pre-normalization is required here.
 
         Returns
         -------
-        distances : np.ndarray of shape (n_samples, n_clusters)
+        distances : numpy.ndarray of shape (n_samples, n_clusters)
             The pairwise distance between each sample and each cluster centroid.
 
         Notes
@@ -258,13 +258,13 @@ class CAPs:
 
         Parameters
         ----------
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             New data to assign to clusters. Can be passed in raw (un-normalized) form -- see
             transform().
 
         Returns
         -------
-        labels : np.ndarray of shape (n_samples,)
+        labels : numpy.ndarray of shape (n_samples,)
             The index of the nearest cluster for each sample.
 
         Notes
@@ -283,7 +283,7 @@ class CAPs:
 
         Parameters
         ----------
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             The data to reconstruct.
 
         prenormalize_X : bool, default=True
@@ -297,17 +297,17 @@ class CAPs:
 
         Returns
         -------
-        recon : np.ndarray of shape (n_samples, n_features)
+        recon : numpy.ndarray of shape (n_samples, n_features)
             The reconstructed data, i.e. coeffs[:, None] * ``cluster_centers_[labels]``.
 
-        coeffs : np.ndarray of shape (n_samples,)
+        coeffs : numpy.ndarray of shape (n_samples,)
             The per-sample scalar coefficient fit for each sample's assigned centroid.
 
-        labels : np.ndarray of shape (n_samples,)
+        labels : numpy.ndarray of shape (n_samples,)
             The cluster assignment used for reconstruction (``self.labels_`` if it matches X in
             length, otherwise freshly computed via predict(X)).
 
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             The data actually used for the reconstruction/coefficient fit -- identical to the
             input if prenormalize_X=False, otherwise the normalized version.
 
@@ -350,7 +350,7 @@ class CAPs:
 
         Parameters
         ----------
-        X : np.ndarray of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             The data to evaluate.
 
         prenormalize_X : bool, default=True
@@ -360,14 +360,14 @@ class CAPs:
 
         Returns
         -------
-        r2_per_cluster : np.ndarray of shape (n_clusters,)
+        r2_per_cluster : numpy.ndarray of shape (n_clusters,)
             R2 computed over the samples assigned to each cluster. NaN for any cluster with no
             assigned samples.
 
         r2_overall : float
             R2 computed over all samples jointly.
 
-        recon : np.ndarray of shape (n_samples, n_features)
+        recon : numpy.ndarray of shape (n_samples, n_features)
             The reconstructed data returned by reconstruct_timeseries().
 
         Notes

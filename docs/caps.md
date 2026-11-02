@@ -7,7 +7,7 @@ A set of functions (in subfolder `rubella/caps/`) for deriving co-activation pat
 ```py
 # First generate concatenated timeseries across the whole dataset
 # data_obj is a RUBELLA DataObject
-from rubella.basic import get_concat_timeseries
+from rubella.utils import get_concat_timeseries
 concat_timeseries = get_concat_timeseries(data_obj.timeseries_dict, data_obj.img_id_list)
 
 from rubella.caps.main import CAPs # importing the main CAP function

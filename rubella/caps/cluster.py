@@ -76,7 +76,7 @@ def pre_normalize_distance(X, distance):
 
     Parameters
     ----------
-    X : np.ndarray of shape (n_samples, n_features)
+    X : numpy.ndarray of shape (n_samples, n_features)
         The data to normalize, one row per sample.
 
     distance : str
@@ -84,15 +84,15 @@ def pre_normalize_distance(X, distance):
 
     Returns
     -------
-    X : np.ndarray of shape (n_samples, n_features)
+    X : numpy.ndarray of shape (n_samples, n_features)
         The normalized data. For 'correlation'/'cosine' this is the same underlying array as
         the input, mutated in place (see note above); for 'euclidean' it is the unmodified input.
 
-    Xvar : np.ndarray of shape (n_samples,) or None
+    Xvar : numpy.ndarray of shape (n_samples,) or None
         The per-row scaling factor that was divided out (std for 'correlation', L2 norm for
         'cosine'). None for 'euclidean'. Needed to invert the normalization later.
 
-    Xm : np.ndarray of shape (n_samples,) or None
+    Xm : numpy.ndarray of shape (n_samples,) or None
         The per-row mean that was subtracted out. Only computed for 'correlation'; None
         otherwise. Needed to invert the normalization later.
         
@@ -137,13 +137,13 @@ def kmeans(X, n_clusters, init="k-means++", distance='correlation', n_rep=1, max
 
     Parameters
     ----------
-    X : np.ndarray of shape (n_samples, n_features)
+    X : numpy.ndarray of shape (n_samples, n_features)
         The data to cluster.
 
     n_clusters : int
         The number of clusters.
 
-    init : str or np.ndarray, default='k-means++'
+    init : str or numpy.ndarray, default='k-means++'
         Centroid initialization method: 'k-means++', 'random', or a pre-defined array of shape
         (n_clusters, n_features). See init_centroids().
 
@@ -161,7 +161,7 @@ def kmeans(X, n_clusters, init="k-means++", distance='correlation', n_rep=1, max
         Convergence tolerance for each repetition, expressed as the fraction of samples
         reassigned between consecutive iterations. See kmeans_single_rep().
 
-    random_state : int, np.random.RandomState, or None, default=None
+    random_state : int, numpy.random.RandomState, or None, default=None
         Controls the randomness of centroid initialization across repetitions.
 
     copy_X : bool, default=False
@@ -172,16 +172,16 @@ def kmeans(X, n_clusters, init="k-means++", distance='correlation', n_rep=1, max
 
     Returns
     -------
-    best_centroids : np.ndarray of shape (n_clusters, n_features)
+    best_centroids : numpy.ndarray of shape (n_clusters, n_features)
         The centroids of the best (lowest-inertia) repetition.
 
-    best_labels : np.ndarray of shape (n_samples,)
+    best_labels : numpy.ndarray of shape (n_samples,)
         The cluster assignment of the best repetition.
 
     best_inertia : float
         The inertia (sum of squared distances to assigned centroid) of the best repetition.
 
-    centroids_rep : list of np.ndarray
+    centroids_rep : list of numpy.ndarray
         The centroids from every repetition, with the best repetition's centroids at index 0.
         Used e.g. by CAPs.cross_rep_robustness() to assess consistency across repetitions.
         
@@ -262,15 +262,15 @@ def kmeans_single_rep(X, n_clusters, init="k-means++", distance='correlation', r
 
     Parameters
     ----------
-    X : np.ndarray of shape (n_samples, n_features)
-        The data to cluster. Must already be normalized to match `distance` (see
+    X : numpy.ndarray of shape (n_samples, n_features)
+        The data to cluster. Must already be normalized to match ``distance`` (see
         pre_normalize_distance()) -- this function does not normalize X itself, since X is
         shared and reused unchanged across every repetition in kmeans().
 
     n_clusters : int
         The number of clusters.
 
-    init : str or np.ndarray, default='k-means++'
+    init : str or numpy.ndarray, default='k-means++'
         Centroid initialization method, or a pre-defined array of initial centroids -- see
         init_centroids(). In normal use this is called by kmeans(), which always passes a
         specific centroid array already selected for this repetition.
@@ -290,15 +290,15 @@ def kmeans_single_rep(X, n_clusters, init="k-means++", distance='correlation', r
         cluster between consecutive iterations. The loop stops once this fraction drops to or
         below tol, or once max_iter is reached.
 
-    random_state : int, np.random.RandomState, or None, default=None
+    random_state : int, numpy.random.RandomState, or None, default=None
         Passed through to init_centroids() for the initial centroid selection.
 
     Returns
     -------
-    M : np.ndarray of shape (n_clusters, n_features)
+    M : numpy.ndarray of shape (n_clusters, n_features)
         The final cluster centroids, in the same (possibly normalized) space as X.
 
-    labels : np.ndarray of shape (n_samples,)
+    labels : numpy.ndarray of shape (n_samples,)
         The final cluster assignment for each sample.
 
     inertia : float

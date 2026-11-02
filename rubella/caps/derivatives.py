@@ -3,9 +3,8 @@ import numpy as np
 
 
 def get_caps_probs(X, caps, dist_thresh=None):
-    """
-    Returns the probability of occurence of each CAP within 
-    the input X.
+    """Return the probability of occurrence of each CAP within the input X.
+
     dist_thresh can be set as a maximal distance threshold
     to be counted as a valid data point to estimate probabilities.
     """
@@ -24,8 +23,7 @@ def get_caps_probs(X, caps, dist_thresh=None):
 
 
 def convert_to_dwell_time(labels):
-    """
-    Replace each run of identical labels with its length.
+    """Replace each run of identical labels with its length.
     
     Example: [1, 1, 2, 2, 2, 3] → [2, 2, 3, 3, 3, 1]
     """

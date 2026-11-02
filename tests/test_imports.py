@@ -6,7 +6,7 @@ import pytest
 
 import rubella
 
-# every module found under the rubella package, e.g. 'rubella.basic', 'rubella.caps.main'
+# every module found under the rubella package, e.g. 'rubella.basic_fc', 'rubella.caps.main'
 MODULES = [module.name for module in pkgutil.walk_packages(rubella.__path__, prefix='rubella.')]
 
 

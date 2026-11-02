@@ -47,7 +47,7 @@ You should become familiar with RUBELLA's DataObject, as it is at the core of ho
 Next, downstream analyses across all images can be conveniently computed using various implementations of
 functional connectivity analyses in the package... for example for global connectivity:
 ```py
-from rubella.basic import compute_global_connectivity
+from rubella.basic_fc import compute_global_connectivity
 GC_dict = compute_global_connectivity(data_obj.timeseries_dict, data_obj.img_id_list, verbose=True)
 ```
 Most functional connectivity functions in RUBELLA stores the output in a python dictionary format, where

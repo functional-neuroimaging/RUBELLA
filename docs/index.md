@@ -12,3 +12,12 @@ caps
 contributing
 api
 ```
+
+```{toctree}
+---
+maxdepth: 1
+caption: Examples
+glob:
+---
+examples/*
+```
