@@ -1,31 +1,21 @@
 name: Build documentation
 
-# - pull requests: build only, to catch documentation errors before merging
-# - push to main: also replace the zip on the rolling "docs-latest" release
-# - publishing a version release: also attach a permanent zip to that release
+# The documentation is hosted on Read the Docs (https://rubella.readthedocs.io),
+# which rebuilds it on every push to main (see .readthedocs.yaml).
+# This workflow only checks that the docs build without warnings, so that
+# documentation errors are caught on pull requests before merging.
 on:
   push:
     branches: [main]
   pull_request:
-  release:
-    types: [published]
   workflow_dispatch:  # adds a "Run workflow" button to build on demand
 
 permissions:
   contents: read
 
-# never run two publishing builds for the same branch/tag at once
-concurrency:
-  group: docs-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   build-docs:
-    # docs-latest is maintained by this workflow, never treat it as a version release
-    if: github.event_name != 'release' || github.event.release.tag_name != 'docs-latest'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # needed to create and update releases
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -42,33 +32,3 @@ jobs:
 
       - name: Build the HTML documentation
         run: sphinx-build -b html -W --keep-going docs docs/_build/html
-
-      - name: Upload the documentation
-        uses: actions/upload-artifact@v4
-        with:
-          name: rubella-docs-${{ github.sha }}
-          path: docs/_build/html
-          retention-days: 30
-
-      - name: Publish to the docs-latest release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp -r docs/_build/html rubella-docs
-          zip -qr rubella-docs.zip rubella-docs
-          gh release view docs-latest >/dev/null 2>&1 || \
-            gh release create docs-latest --prerelease --target "$GITHUB_SHA" \
-              --title "Documentation (latest main)" --notes "Created automatically."
-          gh release upload docs-latest rubella-docs.zip --clobber
-          gh release edit docs-latest --notes "HTML documentation built automatically from main at ${GITHUB_SHA}. Unzip and open rubella-docs/index.html."
-
-      - name: Attach the documentation to the version release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          cp -r docs/_build/html "rubella-docs-${TAG}"
-          zip -qr "rubella-docs-${TAG}.zip" "rubella-docs-${TAG}"
-          gh release upload "$TAG" "rubella-docs-${TAG}.zip" --clobber

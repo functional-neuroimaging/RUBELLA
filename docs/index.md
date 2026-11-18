@@ -6,7 +6,6 @@
 maxdepth: 2
 caption: User guide
 ---
-plotting
 qpp
 caps
 contributing

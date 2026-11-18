@@ -112,6 +112,10 @@ setup(
     author=AUTHOR,
     python_requires=REQUIRES_PYTHON,
     url=URL,
+    project_urls={
+        'Documentation': 'https://rubella.readthedocs.io',
+        'Source': URL,
+    },
     packages=find_packages(
         exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     # If your package is a single module, use this instead of 'packages':
