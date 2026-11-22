@@ -5,3 +5,6 @@ dist/
 rubella.egg-info/
 docs/_build/
 __pycache__/
+rubella/__pycache__/
+rubella/pharmacology/__pycache__/
+*.pyc
