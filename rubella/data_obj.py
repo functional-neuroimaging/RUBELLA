@@ -81,6 +81,12 @@ class DataObject:
         The loaded 2D timeseries (time by voxel) for each image, with keys corresponding to the
         image IDs.
 
+    timeseries_masked_dict : dict
+        Same as above except spatial mask is applied.
+
+    num_timeframes: dict
+        An integer indicating the number of timepoints in each timeseries, with keys corresponding to image IDs.
+
     censoring_mask : dict
         The censoring mask arrays, with keys corresponding to the image IDs.
 
@@ -155,6 +161,7 @@ class DataObject:
 
         # all inputs are assumed to overlap in a commonspace
         timeseries_dict = {}
+        timeseries_masked_dict = {}
         num_imgs = len(timeseries_file_list)
         if not img_id_list:
             img_id_list = []
@@ -178,11 +185,17 @@ class DataObject:
             if verbose:
                 print(file)
 
-            timeseries_dict[img_id] = self._load_img_to_masked_array(
-                file, data_type='continuous', resample_to_brain_mask=False)
+            timeseries = self._load_img_to_masked_array(file, data_type='continuous', resample_to_brain_mask=False)
+            timeseries_dict[img_id] = timeseries
+            
+            #also save a spatially masked version
+            timeseries_masked_dict[img_id] = timeseries[:,volume_idx]
+            num_timeframes_dict[img_id] = timeseries.shape[0]
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
+        self.timeseries_masked_dict = timeseries_masked_dict
+        self.num_timeframes = num_timeframes_dict
         return self
 
     def load_censoring_mask(self, censoring_file_list):
