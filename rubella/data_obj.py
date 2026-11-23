@@ -86,6 +86,10 @@ class DataObject:
 
     grouping : dict
         The group ID attributed to each image ID, with keys corresponding to the image IDs.
+
+    timeseries_uncensored_masked_dict : dict
+        The 2D timeseries (time by voxel) for each image with censored frames
+        removed, optionally cropped by ``start_time``/``end_time``. Only set if ``censoring_file_list`` is provided.
     """
 
     def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True,
@@ -103,12 +107,17 @@ class DataObject:
 
         if censoring_file_list:
             self.load_censoring_mask(censoring_file_list)
-            self.uncensor_timeseries()  # requires censoring_mask
+            self.timeseries_uncensored_masked_dict = self._uncensor_funcScan()  # requires censoring_mask
             if start_time is not None or end_time is not None:
-                self.slice_time_range(start_time=start_time, end_time=end_time)  # requires uncensored
+                #extract specific time chunk of the uncensored timeseries in place
+                self.slice_time_range(self.timeseries_uncensored_masked_dict, start_time=start_time, end_time=end_time) 
 
         elif start_time is not None or end_time is not None:
                 raise ValueError("start_time/end_time require a censoring_file_list to uncensor first.")
+
+        else:
+            #if no censoring file list is provided, then this attribute still exists but is None
+            self.timeseries_uncensored_masked_dict = None
 
     def load_commonspace_data_dict(self, timeseries_file_list, img_id_list=None, fname_split=None, verbose=True):
         """Load a list of timeseries images into a dictionary of 2D arrays.
@@ -316,10 +325,10 @@ class DataObject:
 
         return timeseries_uncensored_masked_dict
 
-    def slice_time_range(self, timeseries_uncensored_masked_dict, start_time=None, end_time=None):
+    def slice_time_range(self, start_time=None, end_time=None):
         """
         Slices timeseries_uncensored_masked_dict to a specific time range.
-        Must be called after uncensor_timeseries().
+        Must be called after uncensor_funcScan().
 
         Parameters
         ----------
@@ -328,10 +337,15 @@ class DataObject:
         end_time : int, default=None
             Last timeframe to include (exclusive). If None, uses the full length.
 
-        Returns
+        Attributes
         ----------
         timeseries_uncensored_masked_dict : dictionary
             Updated in-place with the sliced time range.
+
+        Returns
+        -------
+        self : object
+            The DataObject.
 
         """
 
