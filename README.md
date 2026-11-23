@@ -40,7 +40,7 @@ timeseries_file_list.sort()
 censoring_file_list = glob.glob('path_to_censoring_csv_folder/*_frame_censoring_mask.csv')
 
 from rubella.data_obj import DataObject
-data_obj = DataObject(timeseries_file_list, brain_mask_file, img_id_list=None, fname_split='_cleaned', censoring_file_list=censoring_file_list, verbose=True)
+data_obj = DataObject(brain_mask_file, timeseries_file_list, img_id_list=None, fname_split='_cleaned', censoring_file_list=censoring_file_list, verbose=True)
 ```
 You should become familiar with RUBELLA's DataObject, as it is at the core of how the package handles computations at the dataset level, and the object stores the key input for downstream functions. You should its docstring by typing `help(DataObject)` in python or by consulting the reference API in the documentation.
 
