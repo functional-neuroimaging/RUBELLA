@@ -82,10 +82,7 @@ class DataObject:
         image IDs.
 
     timeseries_masked_dict : dict
-        Same as above except spatial mask is applied.
-
-    num_timeframes: dict
-        An integer indicating the number of timepoints in each timeseries, with keys corresponding to image IDs.
+        Same as above except spatial mask is applied so the number of voxels is less.
 
     censoring_mask : dict
         The censoring mask arrays, with keys corresponding to the image IDs.
@@ -109,7 +106,7 @@ class DataObject:
         self.volume_coords[volume_idx] = np.arange(volume_idx.sum())
 
         if timeseries_file_list:
-            self.load_commonspace_data_dict(timeseries_file_list, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
+            self.load_commonspace_data_dict(timeseries_file_list, volume_idx = volume_idx, img_id_list=img_id_list, fname_split=fname_split, verbose=verbose)
 
         if censoring_file_list:
             self.load_censoring_mask(censoring_file_list)
@@ -125,7 +122,7 @@ class DataObject:
             #if no censoring file list is provided, then this attribute still exists but is None
             self.timeseries_uncensored_masked_dict = None
 
-    def load_commonspace_data_dict(self, timeseries_file_list, img_id_list=None, fname_split=None, verbose=True):
+    def load_commonspace_data_dict(self, timeseries_file_list, volume_idx, img_id_list=None, fname_split=None, verbose=True):
         """Load a list of timeseries images into a dictionary of 2D arrays.
 
         The loaded timeseries are stored in the :attr:`timeseries_dict` attribute, and their
@@ -138,6 +135,9 @@ class DataObject:
             A list of file paths, each corresponding to a Nifti 4D timeseries image.
             All images must be in the same commonspace as ``brain_mask_file``.
 
+        volume_idx: 3D array (x, y, z)
+            The loaded brain mask as a boolean array.
+
         img_id_list : list of str, default=None
             Optionally, a list of manually-defined IDs can be provided. Each entry in the list will be
             matched with the corresponding index in ``timeseries_file_list``.
@@ -149,6 +149,7 @@ class DataObject:
             taking the prefix before ``fname_split``. This is useful to remove the filename ending
             from the ID, which may otherwise prevent associating the ID to other file types, like a
             censoring mask file as described in :meth:`load_censoring_mask`.
+
 
         verbose : bool, default=True
             Print filenames during loading.
@@ -185,17 +186,15 @@ class DataObject:
             if verbose:
                 print(file)
 
-            timeseries = self._load_img_to_masked_array(file, data_type='continuous', resample_to_brain_mask=False)
-            timeseries_dict[img_id] = timeseries
+            timeseries_dict[img_id] = self._load_img_to_masked_array(file, data_type='continuous', resample_to_brain_mask=False)
             
             #also save a spatially masked version
-            timeseries_masked_dict[img_id] = timeseries[:,volume_idx]
-            num_timeframes_dict[img_id] = timeseries.shape[0]
+            timeseries_4d = sitk.GetArrayFromImage(sitk.ReadImage(str(file)))
+            timeseries_masked_dict[img_id] = timeseries_4d[:,volume_idx]
 
         self.img_id_list = img_id_list
         self.timeseries_dict = timeseries_dict
         self.timeseries_masked_dict = timeseries_masked_dict
-        self.num_timeframes = num_timeframes_dict
         return self
 
     def load_censoring_mask(self, censoring_file_list):
