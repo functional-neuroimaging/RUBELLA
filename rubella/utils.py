@@ -245,6 +245,47 @@ def get_concat_timeseries(timeseries_dict, img_id_list):
     concat_timeseries = np.concatenate([timeseries_dict[img_id] for img_id in img_id_list], axis=0)
     return concat_timeseries
 
+def uncensor_funcScan(epi, censor_mask, type = 'nan'):
+    """
+    epi : np.ndarray
+        Array with shape (T_kept, ...)
+    censor_mask : array-like (bool)
+        Boolean array of length T_full
+        True = kept frame, False = censored
+    type : str
+        'mean' or 'nan'. indicates if the censored frames should be replaced with 
+        a volume of nans or the mean image across time.
+
+    Returns
+    -------
+    epi_full : np.ndarray
+        Reconstructed array with shape (T_full, ...)
+    """
+    if type not in ["mean", "nan"]:
+        raise ValueError("type must be 'mean' or 'nan'")
+
+    censor_mask = np.asarray(censor_mask)
+    T_full = censor_mask.shape[0]
+    T_kept = epi.shape[0]
+
+    if np.sum(censor_mask) != T_kept:
+        raise ValueError("Number of True values in censor_mask must match epi.shape[0]")
+
+    # Allocate output
+    out_shape = (T_full,) + epi.shape[1:]
+    epi_full = np.empty(out_shape, dtype=epi.dtype)
+
+    # Fill kept frames
+    epi_full[censor_mask] = epi
+
+    # Compute fill value
+    if type == "mean":
+        mean_vol = np.mean(epi, axis=0)
+        epi_full[~censor_mask] = mean_vol
+    elif type == "nan":
+        epi_full[~censor_mask] = np.full_like(epi[0], np.nan)
+
+    return epi_full
 
 '''
 Internal operations

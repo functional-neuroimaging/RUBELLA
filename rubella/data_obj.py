@@ -3,7 +3,7 @@ import pathlib
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from .utils import load_img_to_masked_array
+from .utils import load_img_to_masked_array, uncensor_funcScan
 
 class DataObject:
     """Group-level container of timeseries images in a common 2D time-by-voxel format.
@@ -53,6 +53,12 @@ class DataObject:
         Hence, it is important to set :attr:`img_id_list` when loading timeseries so that it can
         match those files.
 
+    start_time: int, default None.
+        The timepoint number from which to start loading the scan. The default loads the whole scan.
+
+    end_time: int, default None.
+        The timepoint number at which to end loading the scan. The default loads the whole scan.
+
     verbose : bool, default=True
         Print filenames during loading.
 
@@ -82,7 +88,8 @@ class DataObject:
         The group ID attributed to each image ID, with keys corresponding to the image IDs.
     """
 
-    def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True):
+    def __init__(self, brain_mask_file, timeseries_file_list=None, img_id_list=None, fname_split=None, censoring_file_list=None, verbose=True,
+                 start_time=None, end_time=None):
         # the brain mask file defines the voxel commonspace to load each volume
         self.brain_mask_file = Path(brain_mask_file)
 
@@ -96,6 +103,12 @@ class DataObject:
 
         if censoring_file_list:
             self.load_censoring_mask(censoring_file_list)
+            self.uncensor_timeseries()  # requires censoring_mask
+            if start_time is not None or end_time is not None:
+                self.slice_time_range(start_time=start_time, end_time=end_time)  # requires uncensored
+
+        elif start_time is not None or end_time is not None:
+                raise ValueError("start_time/end_time require a censoring_file_list to uncensor first.")
 
     def load_commonspace_data_dict(self, timeseries_file_list, img_id_list=None, fname_split=None, verbose=True):
         """Load a list of timeseries images into a dictionary of 2D arrays.
@@ -275,3 +288,67 @@ class DataObject:
         """
         return load_img_to_masked_array(input_img, self.brain_mask_file, data_type=data_type,
                                         resample_to_brain_mask=resample_to_brain_mask, verbose=verbose)
+
+    def _uncensor_funcScan(self):
+        """
+        Uncensors the masked timeseries using the censoring mask, restoring each scan
+        to the full 3600-timepoint commonspace before any time-range slicing is applied.
+
+        Wrapper for :func:`rubella.utils.uncensor_funcScan`, using the DataObject's
+        ``censoring_mask``. See that function for more details.
+
+         Returns
+        ----------
+        timeseries_uncensored_masked_dict : dictionary
+            A dictionary of uncensored 2D timeseries arrays (timeXspace) for each img_id,
+            where the time axis is restored to the full pre-censoring length.
+
+        """
+
+        if not hasattr(self, 'censoring_mask'):
+            raise RuntimeError("censoring_mask not found — call load_censoring_mask() first.")
+
+        timeseries_uncensored_masked_dict = {}
+        for img_id in self.img_id_list:
+            if img_id not in self.censoring_mask:
+                raise ValueError(f"No censoring mask found for {img_id} — cannot uncensor.")
+            timeseries_uncensored_masked_dict[img_id] = uncensor_funcScan(self.timeseries_masked_dict[img_id], self.censoring_mask[img_id])
+
+        return timeseries_uncensored_masked_dict
+
+    def slice_time_range(self, timeseries_uncensored_masked_dict, start_time=None, end_time=None):
+        """
+        Slices timeseries_uncensored_masked_dict to a specific time range.
+        Must be called after uncensor_timeseries().
+
+        Parameters
+        ----------
+        start_time : int, default=None
+            First timeframe to include (inclusive). If None, starts from 0.
+        end_time : int, default=None
+            Last timeframe to include (exclusive). If None, uses the full length.
+
+        Returns
+        ----------
+        timeseries_uncensored_masked_dict : dictionary
+            Updated in-place with the sliced time range.
+
+        """
+
+        for img_id in self.img_id_list:
+            total_frames = timeseries_uncensored_masked_dict[img_id].shape[0]
+            t_start = start_time if start_time is not None else 0
+            t_end   = end_time   if end_time   is not None else total_frames
+
+            if t_start < 0 or t_end > total_frames or t_start >= t_end:
+                raise ValueError(
+                    f"Invalid time range [{t_start}, {t_end}) for {img_id} "
+                    f"which has {total_frames} timeframes."
+                )
+
+            timeseries_uncensored_masked_dict[img_id] = \
+                timeseries_uncensored_masked_dict[img_id][t_start:t_end]
+
+        self.t_start = t_start
+        self.t_end   = t_end
+        return self
