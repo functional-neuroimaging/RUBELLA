@@ -206,9 +206,9 @@ def plot_img(
             )
 
     # tighten display
-    
     if hasattr(fig, "tight_layout"):
         fig.tight_layout()
+         
     return fig, ax
 
 def plot_add_contour(
@@ -1520,7 +1520,7 @@ def compute_stats_factorial(
     participants_df=None, factor1="genotype", factor2="sex",
     factor1_order=None, factor2_order=None,
     random_groups=None, n_jobs=1, chunk_size=32,
-    show_progress=True,
+    show_progress=True, return_intercept=False,
 ):
     """
     Fit a voxelwise two-by-two factorial model with interaction.
@@ -1555,6 +1555,10 @@ def compute_stats_factorial(
     show_progress : bool, default=True
         Show a Rich progress bar for either fitting mode. It counts the
         eligible voxels in completed chunks, including unsuccessful fits.
+    return_intercept : bool, default=False
+        Include the fixed intercept under the 'intercept' key, with
+        the same fields as the other terms. Its estimate equally
+        averages the four fitted cell means.
 
     Returns
     -------
@@ -1581,6 +1585,8 @@ def compute_stats_factorial(
         raise ValueError("Expected more than four observations and at least one voxel.")
     n_rows, n_voxels = values.shape
     factor_names = (factor1, factor2)
+    if return_intercept and "intercept" in factor_names:
+        raise ValueError("A factor cannot be named 'intercept' when returning the intercept.")
     if participants_df is None:
         if factor_names != ("genotype", "sex"):
             raise ValueError("Custom factor columns require participants_df.")
@@ -1634,7 +1640,11 @@ def compute_stats_factorial(
     candidates = np.flatnonzero(
         np.isfinite(values).all(axis=0) & np.any(values != values[0], axis=0)
     )
-    estimates = np.full((3, n_voxels), np.nan)
+    terms = (*factor_names, "interaction")
+    if return_intercept:
+        terms = ("intercept", *terms)
+    coefficient_slice = slice(0 if return_intercept else 1, None)
+    estimates = np.full((len(terms), n_voxels), np.nan)
     errors = np.full_like(estimates, np.nan)
 
     if (
@@ -1676,7 +1686,7 @@ def compute_stats_factorial(
 
     if random_groups is None:
         weights = np.linalg.pinv(design)
-        weight_norm = np.linalg.norm(weights[1:], axis=1)[:, None]
+        weight_norm = np.linalg.norm(weights[coefficient_slice], axis=1)[:, None]
         df = n_rows - design.shape[1]
         eps = np.finfo(float).eps * max(design.shape)
 
@@ -1691,7 +1701,7 @@ def compute_stats_factorial(
                 sigma = residual_norm / np.sqrt(df)
                 yield (
                     columns,
-                    np.where(usable, betas[1:], np.nan),
+                    np.where(usable, betas[coefficient_slice], np.nan),
                     np.where(usable, weight_norm * sigma, np.nan),
                 )
 
@@ -1714,7 +1724,7 @@ def compute_stats_factorial(
         ):
             raise ValueError("n_jobs must be a nonzero integer.")
         def fit_chunk(columns):
-            coefficients = np.full((3, len(columns)), np.nan)
+            coefficients = np.full((len(terms), len(columns)), np.nan)
             standard_errors = np.full_like(coefficients, np.nan)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", ConvergenceWarning)
@@ -1726,8 +1736,8 @@ def compute_stats_factorial(
                         fit = MixedLM(y, design, groups=codes).fit(
                             reml=True, method=["bfgs", "cg"], disp=False
                         )
-                        beta = np.asarray(fit.fe_params)[1:]
-                        se = np.asarray(fit.bse_fe)[1:]
+                        beta = np.asarray(fit.fe_params)[coefficient_slice]
+                        se = np.asarray(fit.bse_fe)[coefficient_slice]
                         random_variance = float(np.asarray(fit.cov_re)[0, 0])
                     except (np.linalg.LinAlgError, FloatingPointError):
                         continue
@@ -1775,5 +1785,5 @@ def compute_stats_factorial(
             "pvalues": pvalues[i],
             "valid_voxels": np.isfinite(statistic[i]) & np.isfinite(pvalues[i]),
         }
-        for i, name in enumerate((*factor_names, "interaction"))
+        for i, name in enumerate(terms)
     }
