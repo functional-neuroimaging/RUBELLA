@@ -36,7 +36,7 @@ nb_execution_mode = 'off'
 # All third-party dependencies are mocked so the docs build in a minimal
 # environment (only the packages in docs/requirements.txt need to be installed).
 autodoc_mock_imports = ['rabies', 'nilearn', 'SimpleITK', 'sklearn', 'scipy', 'seaborn',
-                        'numpy', 'pandas', 'matplotlib']
+                        'numpy', 'pandas', 'matplotlib', 'colorcet', 'joblib', 'rich', 'statsmodels']
 autodoc_member_order = 'bysource'   # keep the order of the source file
 napoleon_google_docstring = False   # the docstrings are numpydoc only
 napoleon_numpy_docstring = True
