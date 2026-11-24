@@ -7,22 +7,34 @@ It is rebuilt automatically from the `main` branch, and documentation for a spec
 
 ## Recommended installation
 
-Below is a template to create a conda environment with RUBELLA installed
+Below is a template to create a conda environment with RUBELLA installed. It requires
+[git](https://git-scm.com/downloads) and a conda distribution (e.g. [Miniforge](https://github.com/conda-forge/miniforge)).
 ```sh
+git clone https://github.com/functional-neuroimaging/RUBELLA.git # download the RUBELLA repository
+# into a new folder named RUBELLA in your current directory
+
+cd RUBELLA # move inside the repository; the next commands must be run from this folder, since they use
+# the rubella_env.yml and setup.py files it contains
+
 conda install -n base -c conda-forge mamba # this installs the mamba package manager, which installs packages 
-# much faster than using the native conda install
+# much faster than using the native conda install (skip this step if mamba is already available)
 
 mamba env create -f rubella_env.yml -n rubella_env # the .yml file contains a list of python dependencies you
 # need to run RUBELLA. They are listed with specific versions that we know work, so this is a more robust method
 # to setup you conda environment
 # `-n rubella_env` is the name of your environment, you can give it another name if you wish
 
-conda activate rubella # activate your python environment, so that you will install rubella inside with the 
-# next command
+conda activate rubella_env # activate your python environment (use the same name as above), so that you will
+# install rubella inside with the next command
 
-pip install -e . # this will install the rubella package, and it is ready for import when you code in python 
-# using the newly created environment
+pip install . # this will install the rubella package, and it is ready for import when you code in python 
+# using the newly created environment. The environment gets its own copy of the code as it is now, so later
+# changes to the RUBELLA folder do not affect your installation until you reinstall
 ```
+
+To check that the installation worked, run `python -c "import rubella"` inside the activated environment.
+To update RUBELLA later, run `git pull` and then `pip install .` again from inside the `RUBELLA` folder,
+with the environment activated.
 
 ## Quick introduction: data loading, computing functional connectivity, and visualizing outputs
 
