@@ -90,6 +90,30 @@ depth: 1
    :undoc-members:
 ```
 
+## `rubella.stats` - Voxelwise statistics
+
+```{eval-rst}
+.. currentmodule:: rubella.stats
+
+.. autosummary::
+   :nosignatures:
+
+   perform_SBMs
+   estimate_maps_one_sample
+   compute_stats_one_sample
+   correct_maps_one_sample
+   estimate_maps_two_samples
+   compute_stats_two_samples
+   correct_maps_two_samples
+   compute_stats_factorial
+   plot_img
+   plot_add_contour
+   plot_cum_CI
+
+.. automodule:: rubella.stats
+   :members:
+```
+
 ## `rubella.qc.report` - Quality control: report
 
 ```{eval-rst}
