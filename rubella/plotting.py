@@ -205,7 +205,10 @@ def plot_brain(data,brain_mask,template_file=None,
         pos = ax.imshow(slices_background, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=0,vmax=1,cmap='gray', alpha=1, interpolation='none')
         ax.axis('off')
 
-    pos = ax.imshow(data_slices, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=vmin, vmax=vmax,cmap=cmap, alpha=alpha, interpolation='none')
+    # interpolation='none' drops array-valued alpha when saving to vector formats (svg/pdf),
+    # so use 'nearest' in that case; raise savefig dpi to keep pixels crisp.
+    interpolation = 'nearest' if weighted_alpha else 'none'
+    pos = ax.imshow(data_slices, extent=[0,bbox_physical_dimensions[0],0,bbox_physical_dimensions[1]], vmin=vmin, vmax=vmax,cmap=cmap, alpha=alpha, interpolation=interpolation)
     ax.axis('off')
 
     if plot_cbar:
